@@ -143,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             DrawerItemWidget(
                               title: "AI Chat",
                               onTap: () {
-                                Get.toNamed(Routes.aiChat);
+                                Get.toNamed(Routes.userAIchat);
                               },
                             ),
                             DrawerItemWidget(

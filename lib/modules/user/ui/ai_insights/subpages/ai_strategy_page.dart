@@ -5,7 +5,7 @@ import 'package:get/get.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 
 import '../../../controllers/organization_controller.dart';
-import 'ai_chatting_screen.dart';
+import 'ai_strategy_chatting_screen.dart';
 import 'generate_ai_strategies_dialog.dart';
 
 class AiStrategyPage extends StatefulWidget {

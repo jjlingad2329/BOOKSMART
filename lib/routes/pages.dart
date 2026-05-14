@@ -34,6 +34,7 @@ import '../modules/cpa/ui/leads_screen.dart';
 import '../modules/cpa/ui/orders_screen.dart';
 import '../modules/user/ui/ai_insights/ai_insights_screen.dart';
 import '../modules/common/ui/authentication/forgot.dart';
+import '../modules/user/ui/ai_insights/subpages/ai_strategy_chatting_screen.dart';
 import '../modules/user/ui/financial_statement/financial_statement.dart';
 import '../modules/user/ui/home/home_screen.dart';
 import '../modules/user/ui/organization/organization_list_screen.dart';
@@ -55,11 +56,12 @@ class AppPages {
     GetPage(name: Routes.signUp, page: () => const SignupScreen()),
     GetPage(name: Routes.verifyEmail, page: () => const VerifyEmailScreen()),
 
-    // internal
+    // internal-0
     GetPage(
       name: Routes.bulkReview,
       page: () => getRequiredScreen(const BulkReviewScreen(), UserRole.user),
     ),
+
     GetPage(
       name: Routes.buyTokens,
       page: () => getRequiredScreen(const BuyTokensScreen(), UserRole.user),
@@ -153,6 +155,16 @@ class AppPages {
         kIsWeb
             ? WebTemplate(child: OrganizationListScreen())
             : OrganizationListScreen(),
+        UserRole.user,
+      ),
+    ),
+
+    GetPage(
+      name: Routes.userAIchat,
+      page: () => getRequiredScreen(
+        kIsWeb
+            ? WebTemplate(child: AIGenericChatScreen())
+            : AIGenericChatScreen(),
         UserRole.user,
       ),
     ),

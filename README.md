@@ -40,3 +40,21 @@ New feature:
 AI- Startegeiess:
 1. send user transaction and business data to AI to get them
 2. then for each stratgey, user can discuss with AI about it - just like gpt chating, but with a specific context  about this strategy ... 
+
+
+
+1. fix the link to use AI features
+2. general AI chat
+3. update ai-deduction screen design
+
+
+4. CPA payout - waiting from terica approval
+5. 
+
+
+fixed or percentage
+
+
+for meals it is 50%
+
+2027 60%

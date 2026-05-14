@@ -105,7 +105,7 @@ class WebSideBar extends StatelessWidget {
                       SideBarIcon(
                         icon: Icons.blur_circular_rounded,
                         infoMessage: 'AI Chat',
-                        routeName: Routes.aiChat,
+                        routeName: Routes.userAIchat,
                         isShowName: isShowName,
                       ),
                     ],
