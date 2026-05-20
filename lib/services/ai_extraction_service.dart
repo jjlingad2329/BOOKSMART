@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:developer' as dev;
 import 'package:booksmart/models/financial_template_models.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:dio/dio.dart' as dio_client;
 import 'package:image_picker/image_picker.dart';
@@ -102,13 +103,23 @@ Rules:
     List<Map<String, dynamic>> contentParts, {
     int attempt = 1,
   }) async {
+    // Production web: OpenAI blocks browser CORS — use Vercel serverless proxy.
+    // Local web (localhost): call OpenAI directly with the bundled .env key.
+    final host = Uri.base.host;
+    final isLocalWeb =
+        kIsWeb && (host == 'localhost' || host == '127.0.0.1' || host.endsWith('.localhost'));
+    final useProxy = kIsWeb && !isLocalWeb;
+    final url = useProxy
+        ? Uri.parse(Uri.base.origin).resolve('api/openai-chat').toString()
+        : 'https://api.openai.com/v1/chat/completions';
+
     try {
       final response = await _dio.post(
-        'https://api.openai.com/v1/chat/completions',
+        url,
         options: dio_client.Options(
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer $_apiKey',
+            if (!useProxy) 'Authorization': 'Bearer $_apiKey',
           },
           sendTimeout: const Duration(seconds: 45),
           receiveTimeout: const Duration(seconds: 60),

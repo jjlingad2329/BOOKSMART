@@ -2,7 +2,6 @@ import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/models/user_document_model.dart';
 import 'package:booksmart/models/financial_template_models.dart';
 import 'package:booksmart/utils/currency_format.dart';
-import 'package:get/get.dart';
 
 class StatementViewerDialog extends StatelessWidget {
   final UserDocument document;
@@ -134,7 +133,8 @@ class StatementViewerCard extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: () => Get.back(),
+            onPressed: () =>
+                Navigator.of(context, rootNavigator: true).maybePop(),
             icon: const Icon(Icons.close, color: Colors.white70),
           ),
         ],
@@ -388,7 +388,7 @@ class StatementViewerCard extends StatelessWidget {
                 : (isMajor ? Colors.black : Colors.black54),
           ),
           AppText(
-            fmtCurrency(value.abs()),
+            fmtCurrency(value),
             fontSize: isMajor ? 15 : 14,
             fontWeight: isMajor || isTotal ? FontWeight.w900 : FontWeight.w500,
             color:

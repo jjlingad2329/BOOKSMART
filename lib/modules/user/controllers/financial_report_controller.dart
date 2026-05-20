@@ -3,6 +3,7 @@ import 'package:booksmart/modules/user/controllers/organization_controller.dart'
 import 'package:booksmart/models/transaction_model.dart';
 import 'package:booksmart/supabase/tables.dart';
 import 'package:booksmart/utils/supabase.dart';
+import 'package:booksmart/utils/balance_sheet_from_transactions.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart' as intl;
 
@@ -12,6 +13,10 @@ class FinancialReportController extends GetxController {
   RxBool isLoading = false.obs;
   RxBool isRealizedView = true.obs;
   RxBool isDemoMode = false.obs;
+
+  /// After the first successful aggregate, tabs keep showing prior data during
+  /// refetch instead of replacing the whole screen with a blocking spinner.
+  bool hasPresentedFinancialData = false;
 
   void toggleRealizedView(bool val) {
     isRealizedView.value = val;
@@ -23,7 +28,11 @@ class FinancialReportController extends GetxController {
     if (isDemoMode.value) {
       _loadMockBalanceSheetData();
     } else {
-      fetchAndAggregateData(startDate: lastStartDate, endDate: lastEndDate);
+      fetchAndAggregateData(
+        startDate: lastStartDate,
+        endDate: lastEndDate,
+        balanceSheetAsOfSnapshot: lastFetchBalanceSheetSnapshot,
+      );
     }
     update();
   }
@@ -36,6 +45,18 @@ class FinancialReportController extends GetxController {
   // using the same date range the user last selected.
   DateTime? lastStartDate;
   DateTime? lastEndDate;
+
+  /// When true, [lastStartDate] and [lastEndDate] are both the Balance Sheet "As Of" day and
+  /// the last fetch loaded cumulative balances through that day (see [fetchAndAggregateData]).
+  bool lastFetchBalanceSheetSnapshot = false;
+
+  /// Full transaction history through the Balance Sheet As Of (used for exports + engine verify).
+  List<TransactionModel> balanceSheetSnapshotSourceTransactions = [];
+
+  /// 0 = same day previous month, 1 = 7 days before As Of, 2 = 30 days, 3 = 6 calendar months.
+  int balanceSheetComparisonMode = 0;
+  int? _availableYearsOrgId;
+  RxList<int> availableYears = <int>[].obs;
 
   // Aggregate Metrics over all time (or a specific default range)
   RxDouble totalIncome = 0.0.obs;
@@ -89,6 +110,8 @@ class FinancialReportController extends GetxController {
   RxDouble beginningCashBalance = 0.0.obs;
   RxDouble netChangeInCash = 0.0.obs;
   RxDouble endingCashBalance = 0.0.obs;
+  RxDouble cashInflow = 0.0.obs;
+  RxDouble cashOutflow = 0.0.obs;
 
   // Previous Period Comparison for KPIs
   RxDouble prevPeriodIncome = 0.0.obs;
@@ -102,6 +125,10 @@ class FinancialReportController extends GetxController {
   RxDouble prevPeriodLiabilities = 0.0.obs;
   RxDouble prevPeriodCurrentAssets = 0.0.obs;
   RxDouble prevPeriodCurrentLiabilities = 0.0.obs;
+  RxDouble prevPeriodCashInflow = 0.0.obs;
+  RxDouble prevPeriodCashOutflow = 0.0.obs;
+
+  int _latestFetchRequestId = 0;
 
   // Granular Growth Data for Charts
   RxList<Map<String, dynamic>> chartData = <Map<String, dynamic>>[].obs;
@@ -200,8 +227,9 @@ class FinancialReportController extends GetxController {
   }
 
   double get prevPeriodCurrentRatio {
-    if (prevPeriodCurrentLiabilities.value == 0)
+    if (prevPeriodCurrentLiabilities.value == 0) {
       return prevPeriodCurrentAssets.value > 0 ? 5.0 : 0.0;
+    }
     return prevPeriodCurrentAssets.value / prevPeriodCurrentLiabilities.value;
   }
 
@@ -265,7 +293,9 @@ class FinancialReportController extends GetxController {
   Future<void> fetchAndAggregateData({
     DateTime? startDate,
     DateTime? endDate,
+    bool balanceSheetAsOfSnapshot = false,
   }) async {
+    final int requestId = ++_latestFetchRequestId;
     if (isDemoMode.value) return;
 
     final DateTime now = DateTime.now();
@@ -276,42 +306,77 @@ class FinancialReportController extends GetxController {
       isLoading.value = true;
       update();
 
-      DateTime effectiveStart = _dateOnly(startDate ?? firstDayOfYear);
-      DateTime effectiveEnd = _dateOnly(endDate ?? today);
-      if (effectiveStart.isAfter(effectiveEnd)) {
-        final tmp = effectiveStart;
+      late final DateTime effectiveStart;
+      late final DateTime effectiveEnd;
+      late final DateTime queryLowerBound;
+      late final DateTime metricsStartDate;
+      late final DateTime metricsEndDate;
+      late final DateTime metricsPrevStart;
+      late final DateTime metricsPrevEnd;
+      late final DateTime reportStart;
+
+      if (balanceSheetAsOfSnapshot) {
+        effectiveEnd = _dateOnly(endDate ?? today);
         effectiveStart = effectiveEnd;
-        effectiveEnd = tmp;
+        queryLowerBound = DateTime(2000, 1, 1);
+        reportStart = effectiveEnd;
+        final DateTime prevAsOf = _sameDayPreviousMonth(effectiveEnd);
+        metricsEndDate = effectiveEnd;
+        metricsStartDate = DateTime(
+          effectiveEnd.year - 1,
+          effectiveEnd.month,
+          1,
+        );
+        metricsPrevEnd = prevAsOf;
+        metricsPrevStart = DateTime(prevAsOf.year - 1, prevAsOf.month, 1);
+        lastFetchBalanceSheetSnapshot = true;
+      } else {
+        lastFetchBalanceSheetSnapshot = false;
+        var rangeStart = _dateOnly(startDate ?? firstDayOfYear);
+        var rangeEnd = _dateOnly(endDate ?? today);
+        if (rangeStart.isAfter(rangeEnd)) {
+          final tmp = rangeStart;
+          rangeStart = rangeEnd;
+          rangeEnd = tmp;
+        }
+        effectiveStart = rangeStart;
+        effectiveEnd = rangeEnd;
+        queryLowerBound = effectiveStart;
+        reportStart = effectiveStart;
+        metricsStartDate = effectiveStart;
+        metricsEndDate = effectiveEnd;
+        if (!effectiveStart.isAfter(effectiveEnd)) {
+          final inclusiveDays =
+              effectiveEnd.difference(effectiveStart).inDays + 1;
+          final pEnd = effectiveStart.subtract(const Duration(days: 1));
+          final pStart = pEnd.subtract(Duration(days: inclusiveDays - 1));
+          metricsPrevStart = pStart;
+          metricsPrevEnd = pEnd;
+        } else {
+          metricsPrevStart = DateTime(now.year - 1, 1, 1);
+          metricsPrevEnd = DateTime(now.year - 1, 12, 31);
+        }
       }
+
       lastStartDate = effectiveStart;
       lastEndDate = effectiveEnd;
-
-      DateTime pStart;
-      DateTime pEnd;
-      if (!effectiveStart.isAfter(effectiveEnd)) {
-        final inclusiveDays =
-            effectiveEnd.difference(effectiveStart).inDays + 1;
-        pEnd = effectiveStart.subtract(const Duration(days: 1));
-        pStart = pEnd.subtract(Duration(days: inclusiveDays - 1));
-      } else {
-        pStart = DateTime(now.year - 1, 1, 1);
-        pEnd = DateTime(now.year - 1, 12, 31);
-      }
 
       final orgId = getCurrentOrganization?.id;
       if (orgId == null) {
         log("⚠️ [FRC] Organization ID is null. Aborting fetch.");
         return;
       }
+      await _ensureAvailableYears(orgId);
 
       dynamic query = supabase
           .from(SupabaseTable.transaction)
           .select()
           .eq('org_id', orgId);
-      query = query.gte('date_time', _sqlDateLocal(effectiveStart));
+      query = query.gte('date_time', _sqlDateLocal(queryLowerBound));
       query = query.lt('date_time', _sqlDateLocal(_nextDay(effectiveEnd)));
 
       final res = await query;
+      if (requestId != _latestFetchRequestId) return;
       final List<TransactionModel> currentTransactions = (res as List)
           .map((e) => TransactionModel.fromJson(e))
           .toList();
@@ -319,21 +384,30 @@ class FinancialReportController extends GetxController {
       dynamic prevQuery = supabase
           .from(SupabaseTable.transaction)
           .select()
-          .eq('org_id', orgId)
-          .gte('date_time', _sqlDateLocal(pStart))
-          .lt('date_time', _sqlDateLocal(_nextDay(pEnd)));
+          .eq('org_id', orgId);
+      if (balanceSheetAsOfSnapshot) {
+        final DateTime prevAsOf = _sameDayPreviousMonth(effectiveEnd);
+        prevQuery = prevQuery
+            .gte('date_time', _sqlDateLocal(queryLowerBound))
+            .lt('date_time', _sqlDateLocal(_nextDay(prevAsOf)));
+      } else {
+        prevQuery = prevQuery
+            .gte('date_time', _sqlDateLocal(metricsPrevStart))
+            .lt('date_time', _sqlDateLocal(_nextDay(metricsPrevEnd)));
+      }
 
       final prevRes = await prevQuery;
+      if (requestId != _latestFetchRequestId) return;
       final List<TransactionModel> previousTransactions = (prevRes as List)
           .map((e) => TransactionModel.fromJson(e))
           .toList();
 
-      final DateTime reportStart = effectiveStart;
       final openingRes = await supabase
           .from(SupabaseTable.transaction)
           .select()
           .eq('org_id', orgId)
           .lt('date_time', _sqlDateLocal(reportStart));
+      if (requestId != _latestFetchRequestId) return;
       final List<TransactionModel> openingTransactions = (openingRes as List)
           .map((e) => TransactionModel.fromJson(e))
           .toList();
@@ -350,19 +424,82 @@ class FinancialReportController extends GetxController {
       _calculateMetrics(
         currentTransactions,
         previousTransactions,
-        startDate: effectiveStart,
-        endDate: effectiveEnd,
-        prevStart: pStart,
-        prevEnd: pEnd,
+        startDate: metricsStartDate,
+        endDate: metricsEndDate,
+        prevStart: metricsPrevStart,
+        prevEnd: metricsPrevEnd,
         openingCash: openingCash,
       );
+      if (balanceSheetAsOfSnapshot) {
+        balanceSheetSnapshotSourceTransactions = List<TransactionModel>.from(
+          currentTransactions,
+        );
+        _applyEngineBalanceSheetSnapshot();
+        refreshBalanceSheetComparisonBaselines();
+      } else {
+        // Range fetch (dashboard / P&L): cumulative balance sheet through [effectiveEnd] must not
+        // depend on transactions only inside the visible window (fixes export vs dashboard mismatch).
+        dynamic bsHistQuery = supabase
+            .from(SupabaseTable.transaction)
+            .select()
+            .eq('org_id', orgId)
+            .gte('date_time', _sqlDateLocal(DateTime(2000, 1, 1)))
+            .lt('date_time', _sqlDateLocal(_nextDay(effectiveEnd)));
+        final bsHistRes = await bsHistQuery;
+        if (requestId != _latestFetchRequestId) return;
+        balanceSheetSnapshotSourceTransactions = (bsHistRes as List)
+            .map((e) => TransactionModel.fromJson(e))
+            .toList();
+        _applyEngineBalanceSheetSnapshot(includeNetIncome: false);
+      }
+      hasPresentedFinancialData = true;
     } catch (e, s) {
       log("❌ [FRC] fetchAndAggregateData error: $e");
       log(s.toString());
     } finally {
-      isLoading.value = false;
-      update();
+      // if (requestId != _latestFetchRequestId) return;
+      // isLoading.value = false;
+      // update();
+
+      if (requestId != _latestFetchRequestId) {
+        // do nothing
+      } else {
+        isLoading.value = false;
+        update();
+      }
     }
+  }
+
+  Future<void> _ensureAvailableYears(int orgId) async {
+    if (_availableYearsOrgId == orgId && availableYears.isNotEmpty) return;
+    final years = <int>{};
+    const pageSize = 1000;
+    var offset = 0;
+
+    while (true) {
+      final rows = await supabase
+          .from(SupabaseTable.transaction)
+          .select('date_time')
+          .eq('org_id', orgId)
+          .order('date_time', ascending: false)
+          .range(offset, offset + pageSize - 1);
+
+      final page = (rows as List);
+      if (page.isEmpty) break;
+
+      for (final row in page) {
+        final rawDate = (row['date_time'] ?? '').toString();
+        final parsed = DateTime.tryParse(rawDate);
+        if (parsed != null) years.add(parsed.year);
+      }
+
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    final sorted = years.toList()..sort((a, b) => b.compareTo(a));
+    _availableYearsOrgId = orgId;
+    availableYears.assignAll(sorted);
   }
 
   void _calculateMetrics(
@@ -374,6 +511,109 @@ class FinancialReportController extends GetxController {
     required DateTime prevEnd,
     required double openingCash,
   }) {
+    double normalizeCashFlowAmount(
+      String lowerTitle,
+      double rawAmount, {
+      required String section,
+    }) {
+      final abs = rawAmount.abs();
+      if (abs < 0.0000001) return 0.0;
+
+      bool hasAny(List<String> keys) => keys.any(lowerTitle.contains);
+
+      if (section == 'operating') {
+        // Working capital directional rules.
+        if (lowerTitle.contains('receivable')) {
+          if (hasAny(const ['decrease', 'decreased', 'decline'])) return abs;
+          if (hasAny(const ['increase', 'increased', 'growth'])) return -abs;
+        }
+        if (lowerTitle.contains('payable')) {
+          if (hasAny(const ['increase', 'increased', 'growth'])) return abs;
+          if (hasAny(const ['decrease', 'decreased', 'decline'])) return -abs;
+        }
+        if (lowerTitle.contains('inventory')) {
+          if (hasAny(const ['decrease', 'decreased', 'decline'])) return abs;
+          if (hasAny(const ['increase', 'increased', 'growth'])) return -abs;
+        }
+
+        if (hasAny(const [
+          'cash received',
+          'received from customer',
+          'interest received',
+          'refund received',
+        ])) {
+          return abs;
+        }
+        if (hasAny(const [
+          'cash paid',
+          'paid to vendor',
+          'payroll',
+          'rent',
+          'utilities',
+          'insurance',
+          'vendor payment',
+        ])) {
+          return -abs;
+        }
+      } else if (section == 'investing') {
+        if (hasAny(const ['sale', 'sold', 'disposal', 'proceeds'])) return abs;
+        if (hasAny(const [
+          'purchase',
+          'purchased',
+          'buy',
+          'acquire',
+          'capex',
+        ])) {
+          return -abs;
+        }
+      } else if (section == 'financing') {
+        if (hasAny(const [
+          'loan proceeds',
+          'proceeds from loan',
+          'owner investment',
+          'capital contribution',
+          'stock issuance',
+          'share issuance',
+          'equity injection',
+          '[cf:contribution]',
+        ])) {
+          return abs;
+        }
+        if (hasAny(const [
+          'loan principal',
+          'principal payment',
+          'owner draw',
+          'dividend',
+          'debt repayment',
+          'repayment',
+          '[cf:distributions]',
+        ])) {
+          return -abs;
+        }
+      }
+
+      return rawAmount;
+    }
+
+    Map<String, double> getCashTotals(List<TransactionModel> txs) {
+      double inflow = 0.0;
+      double outflow = 0.0;
+      for (final tx in txs) {
+        final title = tx.title.toLowerCase();
+        final bool isInternalTransfer =
+            title.contains('credit card payment') ||
+            title.contains('transfer to') ||
+            title.contains('autopay');
+        if (isInternalTransfer) continue;
+        if (tx.amount > 0) {
+          inflow += tx.amount;
+        } else if (tx.amount < 0) {
+          outflow += tx.amount.abs();
+        }
+      }
+      return {'inflow': inflow, 'outflow': outflow};
+    }
+
     Map<String, double> getTotals(List<TransactionModel> txs) {
       double inc = 0, exp = 0, cg = 0, opx = 0, dep = 0;
       for (var tx in txs) {
@@ -416,8 +656,9 @@ class FinancialReportController extends GetxController {
           }
         }
 
-        if (title.contains("depreciation") || title.contains("amortization"))
+        if (title.contains("depreciation") || title.contains("amortization")) {
           dep += amt;
+        }
       }
       return {
         'income': inc,
@@ -454,6 +695,12 @@ class FinancialReportController extends GetxController {
     prevPeriodNetIncome.value =
         prevPeriodIncome.value - prevPeriodExpenses.value;
     prevPeriodEbitda.value = prevPeriodNetIncome.value + pT['dep']!;
+    final cCash = getCashTotals(transactions);
+    final pCash = getCashTotals(prevTransactions);
+    cashInflow.value = cCash['inflow'] ?? 0.0;
+    cashOutflow.value = cCash['outflow'] ?? 0.0;
+    prevPeriodCashInflow.value = pCash['inflow'] ?? 0.0;
+    prevPeriodCashOutflow.value = pCash['outflow'] ?? 0.0;
 
     double taxDeductions = 0;
     double opAdj = 0,
@@ -465,6 +712,8 @@ class FinancialReportController extends GetxController {
         ownCont = 0,
         dist = 0,
         finOther = 0;
+    double projectedInflow = 0;
+    double projectedOutflow = 0;
     Map<String, double> incBreakdown = {};
     Map<String, double> expBreakdown = {};
 
@@ -495,8 +744,9 @@ class FinancialReportController extends GetxController {
     for (var tx in transactions) {
       double absAmt = tx.amount.abs();
       // Use yyyy-MM as key to differentiate months across years
-      String mKey = intl.DateFormat('yyyy-MM').format(tx.dateTime);
-      if (!monthlyMap.containsKey(mKey))
+      final txLocalDate = _localDateOnly(tx.dateTime);
+      String mKey = intl.DateFormat('yyyy-MM').format(txLocalDate);
+      if (!monthlyMap.containsKey(mKey)) {
         monthlyMap[mKey] = {
           'income': 0,
           'expense': 0,
@@ -504,6 +754,7 @@ class FinancialReportController extends GetxController {
           'net': 0,
           'dep': 0,
         };
+      }
 
       // Initialize periodic maps for this mKey
       pInc[mKey] ??= {};
@@ -520,6 +771,24 @@ class FinancialReportController extends GetxController {
       pNetInc[mKey] ??= 0.0;
 
       String title = tx.title.toLowerCase();
+      final bool looksUnrealized =
+          title.contains('receivable') ||
+          title.contains('unpaid') ||
+          title.contains('pending invoice') ||
+          title.contains('pending payment') ||
+          title.contains('scheduled') ||
+          title.contains('expected deposit') ||
+          title.contains('expected payment') ||
+          title.contains('bill due') ||
+          title.contains('accounts payable');
+      if (looksUnrealized) {
+        if (tx.amount >= 0) {
+          projectedInflow += tx.amount.abs();
+        } else {
+          projectedOutflow += tx.amount.abs();
+        }
+      }
+      final double realizedCfAmount = looksUnrealized ? 0.0 : tx.amount;
       bool isAL =
           title.contains('[asset') ||
           title.contains('[liab') ||
@@ -625,8 +894,9 @@ class FinancialReportController extends GetxController {
         pNetInc[mKey] = (pNetInc[mKey] ?? 0) + absAmt;
       } else if (isExpense) {
         monthlyMap[mKey]!['expense'] = monthlyMap[mKey]!['expense']! + absAmt;
-        if (isCogs)
+        if (isCogs) {
           monthlyMap[mKey]!['cogs'] = monthlyMap[mKey]!['cogs']! + absAmt;
+        }
         expBreakdown[cleanTitle] = (expBreakdown[cleanTitle] ?? 0) + absAmt;
         pExp[mKey]![cleanTitle] = (pExp[mKey]![cleanTitle] ?? 0) + absAmt;
         pNetInc[mKey] = (pNetInc[mKey] ?? 0) - absAmt;
@@ -639,73 +909,125 @@ class FinancialReportController extends GetxController {
         // Working Capital Changes
         if (title.contains('[cf:manual:operating]') ||
             title.contains('[cf:manual:other]')) {
-          opOther += tx.amount;
-          pOpAct[mKey]![cleanTitle] =
-              (pOpAct[mKey]![cleanTitle] ?? 0) + tx.amount;
+          final signed = normalizeCashFlowAmount(
+            title,
+            realizedCfAmount,
+            section: 'operating',
+          );
+          opOther += signed;
+          pOpAct[mKey]![cleanTitle] = (pOpAct[mKey]![cleanTitle] ?? 0) + signed;
         } else if (title.contains('receivable') ||
             title.contains('inventory') ||
             title.contains('payable') ||
             title.contains('[cf:workingcapital]')) {
-          wcChg += tx.amount;
-          pOpAct[mKey]![cleanTitle] =
-              (pOpAct[mKey]![cleanTitle] ?? 0) + tx.amount;
+          final signed = normalizeCashFlowAmount(
+            title,
+            realizedCfAmount,
+            section: 'operating',
+          );
+          wcChg += signed;
+          pOpAct[mKey]![cleanTitle] = (pOpAct[mKey]![cleanTitle] ?? 0) + signed;
         } else if (title.contains('[cf:op:other]') ||
             title.contains('[cf:operating]') ||
             title.contains('other operating')) {
-          opOther += tx.amount;
-          pOpAct[mKey]![cleanTitle] =
-              (pOpAct[mKey]![cleanTitle] ?? 0) + tx.amount;
+          final signed = normalizeCashFlowAmount(
+            title,
+            realizedCfAmount,
+            section: 'operating',
+          );
+          opOther += signed;
+          pOpAct[mKey]![cleanTitle] = (pOpAct[mKey]![cleanTitle] ?? 0) + signed;
         }
 
         // Investing Activities
         if (title.contains('[cf:manual:investing]') ||
             title.contains('[cf:invest:other]') ||
             title.contains('other investing')) {
-          invAct += tx.amount;
+          final signed = normalizeCashFlowAmount(
+            title,
+            realizedCfAmount,
+            section: 'investing',
+          );
+          invAct += signed;
           pInvAct[mKey]![cleanTitle] =
-              (pInvAct[mKey]![cleanTitle] ?? 0) + tx.amount;
+              (pInvAct[mKey]![cleanTitle] ?? 0) + signed;
         } else if (title.contains('equipment') ||
             title.contains('property') ||
             title.contains('[cf:investing]') ||
             title.contains('asset purchase')) {
-          astPur += tx.amount;
+          final signed = normalizeCashFlowAmount(
+            title,
+            realizedCfAmount,
+            section: 'investing',
+          );
+          astPur += signed;
           pInvAct[mKey]![cleanTitle] =
-              (pInvAct[mKey]![cleanTitle] ?? 0) + tx.amount;
+              (pInvAct[mKey]![cleanTitle] ?? 0) + signed;
         } else if (title.contains('investment')) {
-          invAct += tx.amount;
+          final signed = normalizeCashFlowAmount(
+            title,
+            realizedCfAmount,
+            section: 'investing',
+          );
+          invAct += signed;
           pInvAct[mKey]![cleanTitle] =
-              (pInvAct[mKey]![cleanTitle] ?? 0) + tx.amount;
+              (pInvAct[mKey]![cleanTitle] ?? 0) + signed;
         }
 
         // Financing Activities
         if (title.contains('[cf:manual:financing]')) {
-          finOther += tx.amount;
+          final signed = normalizeCashFlowAmount(
+            title,
+            realizedCfAmount,
+            section: 'financing',
+          );
+          finOther += signed;
           pFinAct[mKey]![cleanTitle] =
-              (pFinAct[mKey]![cleanTitle] ?? 0) + tx.amount;
+              (pFinAct[mKey]![cleanTitle] ?? 0) + signed;
         } else if (title.contains('loan') ||
             title.contains('debt') ||
             title.contains('[cf:financing]') ||
             title.contains('loan activities')) {
-          loanAct += tx.amount;
+          final signed = normalizeCashFlowAmount(
+            title,
+            realizedCfAmount,
+            section: 'financing',
+          );
+          loanAct += signed;
           pFinAct[mKey]![cleanTitle] =
-              (pFinAct[mKey]![cleanTitle] ?? 0) + tx.amount;
+              (pFinAct[mKey]![cleanTitle] ?? 0) + signed;
         } else if (title.contains('contribution') ||
             title.contains('[cf:contribution]')) {
-          ownCont += tx.amount;
+          final signed = normalizeCashFlowAmount(
+            title,
+            realizedCfAmount,
+            section: 'financing',
+          );
+          ownCont += signed;
           pFinAct[mKey]![cleanTitle] =
-              (pFinAct[mKey]![cleanTitle] ?? 0) + tx.amount;
+              (pFinAct[mKey]![cleanTitle] ?? 0) + signed;
         } else if (title.contains('distribution') ||
             title.contains('dividend') ||
             title.contains('owner draw') ||
             title.contains('[cf:distributions]')) {
-          dist += tx.amount;
+          final signed = normalizeCashFlowAmount(
+            title,
+            realizedCfAmount,
+            section: 'financing',
+          );
+          dist += signed;
           pFinAct[mKey]![cleanTitle] =
-              (pFinAct[mKey]![cleanTitle] ?? 0) + tx.amount;
+              (pFinAct[mKey]![cleanTitle] ?? 0) + signed;
         } else if (title.contains('[cf:finance:other]') ||
             title.contains('other financing')) {
-          finOther += tx.amount;
+          final signed = normalizeCashFlowAmount(
+            title,
+            realizedCfAmount,
+            section: 'financing',
+          );
+          finOther += signed;
           pFinAct[mKey]![cleanTitle] =
-              (pFinAct[mKey]![cleanTitle] ?? 0) + tx.amount;
+              (pFinAct[mKey]![cleanTitle] ?? 0) + signed;
         }
 
         // --- Balance Sheet Periodic Bucketing ---
@@ -749,8 +1071,8 @@ class FinancialReportController extends GetxController {
         } else if (title.contains('equity') ||
             title.contains('capital') ||
             title.contains('[equity]')) {
-          pEq[mKey]!['Owners Equity'] =
-              (pEq[mKey]!['Owners Equity'] ?? 0) + tx.amount.abs();
+          pEq[mKey]!["Owner's Equity"] =
+              (pEq[mKey]!["Owner's Equity"] ?? 0) + tx.amount.abs();
         }
       }
 
@@ -761,7 +1083,8 @@ class FinancialReportController extends GetxController {
         opAdj += absAmt;
       }
 
-      if (tx.deductible) taxDeductions += absAmt;
+      // Deductions should only come from expense-side transactions.
+      if (tx.deductible && isExpense) taxDeductions += absAmt;
     }
 
     Map<String, double> balanceTotals(List<TransactionModel> txs) {
@@ -838,30 +1161,6 @@ class FinancialReportController extends GetxController {
       };
     }
 
-    currentAssetsBreakdown.value = {
-      if (taggedCurrentAssetsTotal > 0)
-        "Current Assets": taggedCurrentAssetsTotal,
-      "Cash": cashTotal,
-      "Accounts Receivable": arTotal,
-      if (inventoryTotal > 0) "Inventory": inventoryTotal,
-    };
-    fixedAssetsBreakdown.value = {"Fixed Assets": fixedAssetsTotal};
-    otherAssetsBreakdown.value = {"Other Assets": otherAssetsTotal};
-    currentLiabilitiesBreakdown.value = {"Current Liabilities": curLiabTotal};
-    longTermLiabilitiesBreakdown.value = {
-      "Long-Term Liabilities": longTermLiabTotal,
-    };
-    ownerEquityBreakdown.value = {"Owners Equity": equityTotalItems};
-
-    totalAssets.value =
-        cashTotal +
-        arTotal +
-        inventoryTotal +
-        fixedAssetsTotal +
-        otherAssetsTotal;
-    totalLiabilities.value = curLiabTotal + longTermLiabTotal;
-    totalTaxDeductions.value = taxDeductions;
-
     final prevBalance = balanceTotals(prevTransactions);
     prevPeriodAssets.value = prevBalance['assets'] ?? 0.0;
     prevPeriodLiabilities.value = prevBalance['liabilities'] ?? 0.0;
@@ -905,6 +1204,41 @@ class FinancialReportController extends GetxController {
         financingCashFlow.value;
     endingCashBalance.value =
         beginningCashBalance.value + netChangeInCash.value;
+
+    final computedCashForBs = cashTotal.abs() > 0.0001
+        ? cashTotal
+        : endingCashBalance.value;
+    final retainedEarnings = netIncome.value;
+    // final totalEquityForBreakdown = equityTotalItems + retainedEarnings;
+
+    currentAssetsBreakdown.value = {
+      if (taggedCurrentAssetsTotal > 0)
+        "Current Assets": taggedCurrentAssetsTotal,
+      "Cash": computedCashForBs,
+      "Accounts Receivable": arTotal,
+      if (inventoryTotal > 0) "Inventory": inventoryTotal,
+    };
+    fixedAssetsBreakdown.value = {"Fixed Assets": fixedAssetsTotal};
+    otherAssetsBreakdown.value = {"Other Assets": otherAssetsTotal};
+    currentLiabilitiesBreakdown.value = {"Current Liabilities": curLiabTotal};
+    longTermLiabilitiesBreakdown.value = {
+      "Long-Term Liabilities": longTermLiabTotal,
+    };
+    ownerEquityBreakdown.value = {
+      if (equityTotalItems.abs() > 0.0001) "Owner's Equity": equityTotalItems,
+      "Retained Earnings": retainedEarnings,
+    };
+
+    totalAssets.value =
+        computedCashForBs +
+        arTotal +
+        inventoryTotal +
+        fixedAssetsTotal +
+        otherAssetsTotal;
+    totalLiabilities.value = curLiabTotal + longTermLiabTotal;
+    totalTaxDeductions.value = taxDeductions;
+    upcomingReceivables.value = projectedInflow;
+    upcomingPayables.value = projectedOutflow;
 
     incomeBreakdown.assignAll(incBreakdown);
     expenseBreakdown.assignAll(expBreakdown);
@@ -967,13 +1301,116 @@ class FinancialReportController extends GetxController {
   }
 
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+  DateTime _localDateOnly(DateTime d) {
+    final local = d.toLocal();
+    return DateTime(local.year, local.month, local.day);
+  }
 
-  /// Spec: 7–30 days → daily; 1–6 months → weekly; 6–18 months → monthly; 2+ years → quarterly.
+  /// Calendar day in the previous month, clamped (e.g. Mar 31 → Feb 28/29).
+  DateTime _sameDayPreviousMonth(DateTime date) {
+    final d = _dateOnly(date);
+    var y = d.year;
+    var m = d.month - 1;
+    if (m < 1) {
+      m = 12;
+      y--;
+    }
+    final lastDay = DateTime(y, m + 1, 0).day;
+    final day = d.day > lastDay ? lastDay : d.day;
+    return DateTime(y, m, day);
+  }
+
+  DateTime _subtractCalendarMonths(DateTime date, int months) {
+    var y = date.year;
+    var m = date.month - months;
+    while (m < 1) {
+      m += 12;
+      y--;
+    }
+    final lastDay = DateTime(y, m + 1, 0).day;
+    final d = date.day > lastDay ? lastDay : date.day;
+    return DateTime(y, m, d);
+  }
+
+  DateTime _balanceSheetComparisonBaselineDate(DateTime asOf) {
+    final a = _dateOnly(asOf);
+    switch (balanceSheetComparisonMode) {
+      case 1:
+        return _dateOnly(a.subtract(const Duration(days: 7)));
+      case 2:
+        return _dateOnly(a.subtract(const Duration(days: 30)));
+      case 3:
+        return _subtractCalendarMonths(a, 6);
+      case 0:
+      default:
+        return _sameDayPreviousMonth(a);
+    }
+  }
+
+  void setBalanceSheetComparisonMode(int mode) {
+    if (balanceSheetComparisonMode == mode) return;
+    balanceSheetComparisonMode = mode;
+    refreshBalanceSheetComparisonBaselines();
+    update();
+  }
+
+  /// Reconciles Balance Sheet lines with [BalanceSheetLineMetrics] (same engine as exports).
+  ///
+  /// When [includeNetIncome] is false (e.g. dashboard date-range fetch), period P&L [netIncome]
+  /// from [_calculateMetrics] is left unchanged; only balance sheet maps and asset/liability totals update.
+  void _applyEngineBalanceSheetSnapshot({bool includeNetIncome = true}) {
+    if (balanceSheetSnapshotSourceTransactions.isEmpty || lastEndDate == null) {
+      return;
+    }
+    final m = BalanceSheetLineMetrics.computeThrough(
+      balanceSheetSnapshotSourceTransactions,
+      lastEndDate!,
+    );
+    totalAssets.value = m.totalAssets;
+    totalLiabilities.value = m.totalLiabilities;
+    if (includeNetIncome) {
+      netIncome.value = m.netIncome;
+    }
+    currentAssetsBreakdown.assignAll(m.currentAssetsBreakdown);
+    fixedAssetsBreakdown.assignAll(m.fixedAssetsBreakdown);
+    otherAssetsBreakdown.assignAll(m.otherAssetsBreakdown);
+    currentLiabilitiesBreakdown.assignAll(m.currentLiabilitiesBreakdown);
+    longTermLiabilitiesBreakdown.assignAll(m.longTermLiabilitiesBreakdown);
+    ownerEquityBreakdown.assignAll(m.ownerEquityBreakdown);
+  }
+
+  void refreshBalanceSheetComparisonBaselines() {
+    if (!lastFetchBalanceSheetSnapshot ||
+        balanceSheetSnapshotSourceTransactions.isEmpty ||
+        lastEndDate == null) {
+      return;
+    }
+    final base = _balanceSheetComparisonBaselineDate(lastEndDate!);
+    final p = BalanceSheetLineMetrics.computeThrough(
+      balanceSheetSnapshotSourceTransactions,
+      base,
+    );
+    prevPeriodAssets.value = p.totalAssets;
+    prevPeriodLiabilities.value = p.totalLiabilities;
+    prevPeriodNetIncome.value = p.netIncome;
+    prevPeriodCurrentAssets.value = p.currentAssetsBreakdown.values.fold(
+      0.0,
+      (a, b) => a + b,
+    );
+    prevPeriodCurrentLiabilities.value = p.currentLiabilitiesBreakdown.values
+        .fold(0.0, (a, b) => a + b);
+  }
+
+  /// P&L trend bucketing (inclusive day count):
+  /// - 1–31 days → daily (custom month-spanning ranges like the 30-day preset)
+  /// - 32–186 days → weekly (~≤6 months)
+  /// - 187–729 days → monthly
+  /// - 730+ days → quarterly
   _TrendGranularity _trendGranularityForRange(DateTime start, DateTime end) {
     final s = _dateOnly(start);
     final e = _dateOnly(end);
     final days = e.difference(s).inDays + 1;
-    if (days <= 30) return _TrendGranularity.daily;
+    if (days <= 31) return _TrendGranularity.daily;
     if (days <= 186) return _TrendGranularity.weekly;
     if (days < 730) return _TrendGranularity.monthly;
     return _TrendGranularity.quarterly;
@@ -1157,6 +1594,20 @@ class FinancialReportController extends GetxController {
     return (0.0, 0.0);
   }
 
+  bool _isUnrealizedCashFlowTx(TransactionModel tx) {
+    final t = tx.title.toLowerCase();
+    return t.contains('receivable') ||
+        t.contains('accounts receivable') ||
+        t.contains('accounts payable') ||
+        t.contains('unpaid') ||
+        t.contains('pending invoice') ||
+        t.contains('pending payment') ||
+        t.contains('scheduled') ||
+        t.contains('expected deposit') ||
+        t.contains('expected payment') ||
+        t.contains('bill due');
+  }
+
   List<Map<String, dynamic>> _buildTrendSeries(
     List<TransactionModel> txs,
     DateTime rangeStart,
@@ -1175,9 +1626,15 @@ class FinancialReportController extends GetxController {
     final cogs = <String, double>{
       for (final b in buckets) _trendBucketKey(b, g): 0.0,
     };
+    final unrealizedInc = <String, double>{
+      for (final b in buckets) _trendBucketKey(b, g): 0.0,
+    };
+    final unrealizedExp = <String, double>{
+      for (final b in buckets) _trendBucketKey(b, g): 0.0,
+    };
 
     for (final tx in txs) {
-      final d = _dateOnly(tx.dateTime);
+      final d = _localDateOnly(tx.dateTime);
       if (d.isBefore(rs) || d.isAfter(re)) continue;
       final b = _trendBucketStartForDate(d, g);
       final key = _trendBucketKey(b, g);
@@ -1185,6 +1642,13 @@ class FinancialReportController extends GetxController {
       final pair = _plIncomeExpenseForTx(tx);
       inc[key] = inc[key]! + pair.$1;
       exp[key] = exp[key]! + pair.$2;
+      if (_isUnrealizedCashFlowTx(tx)) {
+        if (tx.amount >= 0) {
+          unrealizedInc[key] = unrealizedInc[key]! + tx.amount.abs();
+        } else {
+          unrealizedExp[key] = unrealizedExp[key]! + tx.amount.abs();
+        }
+      }
       final title = tx.title.toLowerCase();
       if (title.startsWith('[cogs]') || title.contains('cost of goods')) {
         cogs[key] = cogs[key]! + tx.amount.abs();
@@ -1196,14 +1660,22 @@ class FinancialReportController extends GetxController {
       final i = inc[key] ?? 0.0;
       final e = exp[key] ?? 0.0;
       final cg = cogs[key] ?? 0.0;
+      final ui = unrealizedInc[key] ?? 0.0;
+      final ue = unrealizedExp[key] ?? 0.0;
       return <String, dynamic>{
         'bucketStart': b,
         'label': _formatTrendAxisLabel(b, g, rs, re),
         'tooltipDate': _formatTrendTooltipDate(b, g),
         'income': i,
         'expense': e,
+        'realizedIncome': i,
+        'realizedExpense': e,
+        'unrealizedIncome': ui,
+        'unrealizedExpense': ue,
         'cogs': cg,
         'net': i - e,
+        'realizedNet': i - e,
+        'unrealizedNet': ui - ue,
         'sortKey': key,
       };
     }).toList();
@@ -1214,6 +1686,24 @@ class FinancialReportController extends GetxController {
   ) {
     double? prevRevenue;
     double? prevExpense;
+    double? prevCogs;
+    const double growthCapPct = 500.0;
+
+    /// Period-over-period % change, aligned with [trendSeries] buckets.
+    /// Prior revenue/expense of 0 with non-zero current caps at [growthCapPct] for chart stability.
+    ({double value, bool isNew}) growthFromPrevious(
+      double current,
+      double? previous,
+    ) {
+      if (previous == null) return (value: 0.0, isNew: false);
+      if (previous == 0.0) {
+        if (current == 0.0) return (value: 0.0, isNew: false);
+        return (value: growthCapPct, isNew: true);
+      }
+      final raw = ((current - previous) / previous) * 100;
+      return (value: raw.clamp(-growthCapPct, growthCapPct), isNew: false);
+    }
+
     return trendSeries.map((row) {
       final currentRevenue = (row['income'] as num?)?.toDouble() ?? 0.0;
       final currentExpense = (row['expense'] as num?)?.toDouble() ?? 0.0;
@@ -1221,21 +1711,24 @@ class FinancialReportController extends GetxController {
       final bucket = row['bucketStart'];
       final tooltipDate = row['tooltipDate'];
       final label = row['label'];
-      final revenueGrowth = (prevRevenue != null && prevRevenue! != 0)
-          ? ((currentRevenue - prevRevenue!) / prevRevenue!) * 100
-          : 0.0;
-      final expenseGrowth = (prevExpense != null && prevExpense! != 0)
-          ? ((currentExpense - prevExpense!) / prevExpense!) * 100
-          : 0.0;
+      final revenueGrowthData = growthFromPrevious(currentRevenue, prevRevenue);
+      final expenseGrowthData = growthFromPrevious(currentExpense, prevExpense);
+      final cogsGrowthData = growthFromPrevious(currentCogs, prevCogs);
       prevRevenue = currentRevenue;
       prevExpense = currentExpense;
+      prevCogs = currentCogs;
       return <String, dynamic>{
         'bucketStart': bucket,
         'name': label,
         'tooltipDate': tooltipDate,
-        'revenueGrowth': revenueGrowth,
-        'expenseGrowth': expenseGrowth,
+        'revenueGrowth': revenueGrowthData.value,
+        'expenseGrowth': expenseGrowthData.value,
+        'cogsGrowth': cogsGrowthData.value,
+        'revenueGrowthIsNew': revenueGrowthData.isNew,
+        'expenseGrowthIsNew': expenseGrowthData.isNew,
+        'cogsGrowthIsNew': cogsGrowthData.isNew,
         'revenue': currentRevenue,
+        'cogs': currentCogs,
         'cogsPct': currentRevenue != 0
             ? (currentCogs / currentRevenue) * 100
             : 0.0,
@@ -1244,6 +1737,7 @@ class FinancialReportController extends GetxController {
   }
 
   void _loadMockBalanceSheetData() {
+    balanceSheetSnapshotSourceTransactions.clear();
     currentAssetsBreakdown.value = {
       "Cash": 145980.0,
       "Accounts Receivable": 291960.0,
@@ -1256,7 +1750,7 @@ class FinancialReportController extends GetxController {
 
     currentLiabilitiesBreakdown.value = {"Current Liabilities": 45000.0};
     longTermLiabilitiesBreakdown.value = {"Long Term Liabilities": 800000.0};
-    ownerEquityBreakdown.value = {"Owners Equity": 500000.0};
+    ownerEquityBreakdown.value = {"Owner's Equity": 500000.0};
     netIncome.value = 114800.0;
     final mockChart = [
       {
@@ -1264,6 +1758,7 @@ class FinancialReportController extends GetxController {
         'revenue': 450000,
         'revenueGrowth': 5.2,
         'expenseGrowth': 3.1,
+        'cogsGrowth': 4.5,
         'cogsPct': 42,
       },
       {
@@ -1271,6 +1766,7 @@ class FinancialReportController extends GetxController {
         'revenue': 480000,
         'revenueGrowth': 6.6,
         'expenseGrowth': 2.8,
+        'cogsGrowth': 3.2,
         'cogsPct': 40,
       },
       {
@@ -1278,6 +1774,7 @@ class FinancialReportController extends GetxController {
         'revenue': 510000,
         'revenueGrowth': 6.2,
         'expenseGrowth': 4.2,
+        'cogsGrowth': 4.0,
         'cogsPct': 41,
       },
     ];
@@ -1285,12 +1782,14 @@ class FinancialReportController extends GetxController {
     trendChartSeries = mockChart.map((e) {
       final rev = (e['revenue'] as num).toDouble();
       final exp = rev * 0.55;
+      final pct = (e['cogsPct'] as num?)?.toDouble() ?? 0;
       return {
         'bucketStart': DateTime.now(),
         'label': e['name'],
         'tooltipDate': e['name'],
         'income': rev,
         'expense': exp,
+        'cogs': rev * pct / 100,
         'net': rev - exp,
         'sortKey': e['name'],
       };

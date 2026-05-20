@@ -221,10 +221,8 @@ class _AddTransactionScreenManualState
 
     if (widget.transaction == null) {
       // ── ADD new transaction ──────────────────────────────────────────────
-      // We need the newly created ID to pass to the tax onboarding screens.
-      // The controller's addTransaction calls Get.back() internally, so we
-      // capture the ID and navigate to Screen 1 in a post-frame callback.
-      await transactionC.addTransactionAndReturnId(model);
+      // Keep add flow isolated to transaction persistence only.
+      await transactionC.addTransaction(model);
     } else {
       // ── UPDATE existing transaction ──────────────────────────────────────
       await transactionC.updateTransaction(data: model, id: widget.transaction!.id);

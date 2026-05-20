@@ -48,6 +48,25 @@ class AiStrategyController extends GetxController {
     }
   }
 
-  double get getTotalPotentialSavings =>
-      strategies.map((e) => e.estimatedSavings).reduce((a, b) => a + b);
+  /// Matches [AiStrategyPage] deduction ring (0.62 → 62%).
+  static const double deductionOptimizationPercent = 0.62;
+
+  double get deductionOptimizationPercentDisplay =>
+      deductionOptimizationPercent * 100;
+
+  double get deductionsNotUtilizedPercentDisplay =>
+      (1 - deductionOptimizationPercent) * 100;
+
+  /// Same label as AI Strategy — not yet wired to a backend total.
+  String get additionalDeductionsFoundDisplay => '\$ - - -';
+
+  double get totalPotentialSavings {
+    if (strategies.isEmpty) return 0;
+    return strategies.fold(
+      0.0,
+      (sum, strategy) => sum + strategy.estimatedSavings,
+    );
+  }
+
+  double get getTotalPotentialSavings => totalPotentialSavings;
 }

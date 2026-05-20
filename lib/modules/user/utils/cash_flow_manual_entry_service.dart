@@ -1,7 +1,8 @@
 import 'package:booksmart/constant/data.dart';
 import 'package:booksmart/models/cash_flow_manual_entry_model.dart';
 import 'package:booksmart/models/transaction_model.dart';
-import 'package:booksmart/modules/user/controllers/transaction_controller.dart';
+import 'package:booksmart/supabase/tables.dart';
+import 'package:booksmart/utils/supabase.dart';
 
 class CashFlowManualEntryService {
   Future<void> saveManualEntry({
@@ -14,21 +15,21 @@ class CashFlowManualEntryService {
         ? '[CF:Adjustments]'
         : entry.sectionTag;
 
-    transactionControllerInstance.addTransaction(
-      TransactionModel(
-        id: -1,
-        title: titleTag,
-        amount: entry.amount,
-        category: null,
-        subcategory: null,
-        type: businessTransactionType,
-        deductible: true,
-        description: entry.notes.trim(),
-        dateTime: entry.date,
-        userId: userId,
-        orgId: orgId,
-      ),
+    final tx = TransactionModel(
+      id: -1,
+      title: titleTag,
+      amount: entry.amount,
+      category: null,
+      subcategory: null,
+      type: businessTransactionType,
+      deductible: true,
+      description: entry.notes.trim(),
+      dateTime: entry.date,
+      userId: userId,
+      orgId: orgId,
     );
+    final payload = tx.toJson()..remove('id');
+    await supabase.from(SupabaseTable.transaction).insert(payload);
   }
 
   CashFlowManualSection suggestSection(String categoryOrNotes) {

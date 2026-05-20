@@ -26,7 +26,7 @@ void goToTaxStrategyOnboarding({
         organizationId: organizationId,
       ),
       title: "Tax Strategy Onboarding",
-      barrierDismissible: false,
+      barrierDismissible: true,
     );
   } else {
     if (shouldCloseBefore) {
@@ -357,11 +357,11 @@ class _TaxStrategyOnboardingStepperState
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
-                  // const Spacer(),
-                  // IconButton(
-                  //   onPressed: () => Get.back(),
-                  //   icon: const Icon(Icons.close),
-                  // ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => Get.back(),
+                    icon: const Icon(Icons.close),
+                  ),
                 ],
               ),
             ),

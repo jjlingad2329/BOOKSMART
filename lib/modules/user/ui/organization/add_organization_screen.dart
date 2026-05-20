@@ -58,6 +58,41 @@ class _AddOrganizationScreenState extends State<AddOrganizationScreen> {
 
   final ScrollController _scrollController = ScrollController();
 
+  bool _looksLikePlaceholderJunk(String input) {
+    final value = input.trim();
+    if (value.isEmpty) return false;
+    final letters = RegExp(r'[A-Za-z]').allMatches(value).length;
+    final digits = RegExp(r'\d').allMatches(value).length;
+    final vowels = RegExp(r'[AEIOUaeiou]').allMatches(value).length;
+    if (letters < 2) return true;
+    if (digits > letters) return true;
+    if (vowels == 0 && letters >= 4) return true;
+    return false;
+  }
+
+  String? _validateOrgName(String? v) {
+    final value = (v ?? '').trim();
+    if (value.isEmpty) return "Required";
+    if (value.length < 3) return "Must be at least 3 characters";
+    if (_looksLikePlaceholderJunk(value)) return "Enter a valid business name";
+    return null;
+  }
+
+  String? _validateOptionalAddressField(String? v, String label) {
+    final value = (v ?? '').trim();
+    if (value.isEmpty) return null;
+    if (_looksLikePlaceholderJunk(value)) return "Enter a valid $label";
+    return null;
+  }
+
+  String? _validateZip(String? v) {
+    final value = (v ?? '').trim();
+    if (value.isEmpty) return null;
+    final zipRegex = RegExp(r'^\d{5}(?:-\d{4})?$');
+    if (!zipRegex.hasMatch(value)) return "Enter a valid ZIP";
+    return null;
+  }
+
   /// Dropdowns
   final stateDropdownKey = GlobalKey<DropdownSearchState<String>>();
   final industryDropdownKey = GlobalKey<DropdownSearchState<String>>();
@@ -179,8 +214,7 @@ class _AddOrganizationScreenState extends State<AddOrganizationScreen> {
                       controller: nameController,
                       labelText: "Organization Name *",
                       hintText: "Organization Name *",
-                      fieldValidator: (v) =>
-                          v == null || v.isEmpty ? "Required" : null,
+                      fieldValidator: _validateOrgName,
                     ),
                     0.02.verticalSpace,
                     AppText("Website", fontWeight: FontWeight.w600),
@@ -233,6 +267,8 @@ class _AddOrganizationScreenState extends State<AddOrganizationScreen> {
                       controller: streetController,
                       labelText: "Street Address",
                       hintText: "Street Address",
+                      fieldValidator: (v) =>
+                          _validateOptionalAddressField(v, "street address"),
                     ),
                     0.02.verticalSpace,
                     AppText("City", fontWeight: FontWeight.w600),
@@ -240,6 +276,8 @@ class _AddOrganizationScreenState extends State<AddOrganizationScreen> {
                       controller: cityController,
                       labelText: "City",
                       hintText: "City",
+                      fieldValidator: (v) =>
+                          _validateOptionalAddressField(v, "city"),
                     ),
                     0.02.verticalSpace,
                     AppText("ZIP Code", fontWeight: FontWeight.w600),
@@ -247,6 +285,7 @@ class _AddOrganizationScreenState extends State<AddOrganizationScreen> {
                       controller: zipController,
                       labelText: "ZIP Code",
                       hintText: "ZIP Code",
+                      fieldValidator: _validateZip,
                     ),
                     0.02.verticalSpace,
                     AppText("Phone Number", fontWeight: FontWeight.w600),

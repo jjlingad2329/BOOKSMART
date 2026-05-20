@@ -65,7 +65,7 @@ class _AiStrategyPageState extends State<AiStrategyPage> {
                         CircularPercentIndicator(
                           radius: 60.0,
                           lineWidth: 8.0,
-                          percent: 0.62,
+                          percent: AiStrategyController.deductionOptimizationPercent,
                           animation: true,
                           animationDuration: 1200,
                           circularStrokeCap: CircularStrokeCap.round,
@@ -73,14 +73,14 @@ class _AiStrategyPageState extends State<AiStrategyPage> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               AppText(
-                                "62%",
+                                '${controller.deductionOptimizationPercentDisplay.toStringAsFixed(0)}%',
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 4),
                               AppText(
-                                "38% of deductions\nnot yet utilized",
+                                '${controller.deductionsNotUtilizedPercentDisplay.toStringAsFixed(0)}% of deductions\nnot yet utilized',
                                 fontSize: 9,
                                 textAlign: TextAlign.center,
                               ),
@@ -104,13 +104,13 @@ class _AiStrategyPageState extends State<AiStrategyPage> {
                     _buildStatCard(
                       context,
                       title: "Additional Deductions Found",
-                      amount: "\$ - - -",
+                      amount: controller.additionalDeductionsFoundDisplay,
                       color: greenColor,
                     ),
                     _buildStatCard(
                       context,
                       title: "Potential Tax Savings",
-                      amount: "\$${controller.getTotalPotentialSavings}",
+                      amount: '\$${controller.totalPotentialSavings.toStringAsFixed(0)}',
                       color: greenColor,
                     ),
                   ],

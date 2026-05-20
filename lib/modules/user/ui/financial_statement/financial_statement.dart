@@ -26,9 +26,7 @@ class FinincialTabController extends GetxController
     tabController = TabController(length: 5, vsync: this);
 
     tabController.addListener(() {
-      if (!tabController.indexIsChanging) {
-        currentIndex.value = tabController.index;
-      }
+      currentIndex.value = tabController.index;
     });
   }
 
@@ -69,30 +67,49 @@ class _FinancialReportScreenState extends State<FinancialReportScreen> {
     final isNarrow = MediaQuery.sizeOf(context).width <= 1024;
 
     return Scaffold(
+      backgroundColor: const Color(0xFF020E2C),
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TabBar(
-            isScrollable: isNarrow,
-            tabAlignment: isNarrow ? TabAlignment.start : TabAlignment.fill,
-            controller: finincialTabController.tabController,
-            dividerColor: Colors.transparent,
-            labelPadding: const EdgeInsets.symmetric(horizontal: 5),
-            labelColor: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87,
-            unselectedLabelColor: Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black45,
-            tabs: const [
-              Tab(text: 'Dashboard'),
-              Tab(text: 'Transactions'),
-              Tab(text: 'Profit & Loss'),
-              Tab(text: 'Balance Sheet'),
-              Tab(text: 'Cash Flow'),
-            ],
+          Container(
+            height: 58,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: const BoxDecoration(
+              color: Color(0xFF020E2C),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TabBar(
+                    isScrollable: isNarrow,
+                    tabAlignment: isNarrow ? TabAlignment.start : TabAlignment.fill,
+                    controller: finincialTabController.tabController,
+                    dividerColor: Colors.transparent,
+                    indicatorSize: isNarrow
+                        ? TabBarIndicatorSize.label
+                        : TabBarIndicatorSize.tab,
+                    indicatorColor: const Color(0xFFFFC72B),
+                    indicatorWeight: 2,
+                    labelPadding: EdgeInsets.symmetric(horizontal: isNarrow ? 12 : 6),
+                    labelColor: Colors.white,
+                    unselectedLabelColor: const Color(0xFF7F96BA),
+                    labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    tabs: const [
+                      Tab(text: 'Dashboard'),
+                      Tab(text: 'Transactions'),
+                      Tab(text: 'Profit & Loss'),
+                      Tab(text: 'Balance Sheet'),
+                      Tab(text: 'Cash Flow'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          // Tab Views
           Expanded(
             child: TabBarView(
               controller: finincialTabController.tabController,
-              children: [
+              children: const [
                 FinancialDashboardTab(),
                 TransactionListScreen(),
                 ProfitLossScreen(),

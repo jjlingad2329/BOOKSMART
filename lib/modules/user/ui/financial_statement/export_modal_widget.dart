@@ -18,6 +18,7 @@ class ExportModalWidget {
     DateTime? initialEndDate,
     bool useSingleDate = false,
     String singleDateLabel = 'As of Date',
+    bool balanceSheetAdvancedExport = false,
     Future<void> Function(PdfExportRequest request)? onExport,
   }) async {
     await showDialog(
@@ -31,6 +32,7 @@ class ExportModalWidget {
         initialEndDate: initialEndDate,
         useSingleDate: useSingleDate,
         singleDateLabel: singleDateLabel,
+        balanceSheetAdvancedExport: balanceSheetAdvancedExport,
         onExport: onExport,
         isExcel: false,
       ),
@@ -47,6 +49,7 @@ class ExportModalWidget {
     DateTime? initialEndDate,
     bool useSingleDate = false,
     String singleDateLabel = 'As of Date',
+    bool balanceSheetAdvancedExport = false,
     required Future<void> Function(PdfExportRequest request) onExport,
   }) async {
     await showDialog(
@@ -60,6 +63,7 @@ class ExportModalWidget {
         initialEndDate: initialEndDate,
         useSingleDate: useSingleDate,
         singleDateLabel: singleDateLabel,
+        balanceSheetAdvancedExport: balanceSheetAdvancedExport,
         onExport: onExport,
         isExcel: true,
       ),
@@ -77,6 +81,7 @@ class _PdfExportDialog extends StatefulWidget {
     this.initialEndDate,
     this.useSingleDate = false,
     this.singleDateLabel = 'As of Date',
+    this.balanceSheetAdvancedExport = false,
     this.onExport,
     this.isExcel = false,
   });
@@ -89,6 +94,7 @@ class _PdfExportDialog extends StatefulWidget {
   final DateTime? initialEndDate;
   final bool useSingleDate;
   final String singleDateLabel;
+  final bool balanceSheetAdvancedExport;
   final Future<void> Function(PdfExportRequest request)? onExport;
   final bool isExcel;
 
@@ -101,8 +107,13 @@ class _PdfExportDialogState extends State<_PdfExportDialog> {
   late DateTime _startDate;
   late DateTime _endDate;
   PdfViewType _viewType = PdfViewType.monthly;
+  int _periodCount = 5;
   bool _isExporting = false;
   String? _validationError;
+
+  bool get _isBalanceSheetAdvanced =>
+      widget.balanceSheetAdvancedExport &&
+      widget.reportType == ExportPdfReportType.balanceSheet;
 
   @override
   void initState() {
@@ -113,6 +124,10 @@ class _PdfExportDialogState extends State<_PdfExportDialog> {
         ? _endDate
         : (widget.initialStartDate ??
               DateTime(_endDate.year, _endDate.month - 2, 1));
+    if (_isBalanceSheetAdvanced) {
+      _periodCount = 5;
+      _viewType = PdfViewType.quarterly;
+    }
     _validate();
   }
 
@@ -153,6 +168,11 @@ class _PdfExportDialogState extends State<_PdfExportDialog> {
   }
 
   void _validate() {
+    if (_isBalanceSheetAdvanced) {
+      _validationError =
+          PdfExportService.validateBalanceSheetPeriodCount(_periodCount);
+      return;
+    }
     if (widget.useSingleDate) {
       _validationError = null;
       return;
@@ -172,6 +192,20 @@ class _PdfExportDialogState extends State<_PdfExportDialog> {
   }
 
   String _columnPreviewText() {
+    if (_isBalanceSheetAdvanced) {
+      final ends = PdfExportService.buildBalanceSheetSnapshotColumnEnds(
+        asOf: _endDate,
+        viewType: _viewType,
+        periodCount: _periodCount,
+      );
+      final labels = PdfExportService.buildBalanceSheetSnapshotColumnLabels(
+        ends,
+        _viewType,
+        _endDate,
+      );
+      final joined = labels.isEmpty ? '-' : labels.join(', ');
+      return '${labels.length}/5 columns: $joined';
+    }
     final labels = _service.buildBucketLabels(_startDate, _endDate, _viewType);
     final joined = labels.isEmpty ? '-' : labels.join(', ');
     return '${labels.length}/5 columns: $joined';
@@ -183,25 +217,62 @@ class _PdfExportDialogState extends State<_PdfExportDialog> {
       setState(() {});
       return;
     }
+    final labels = _isBalanceSheetAdvanced
+        ? PdfExportService.buildBalanceSheetSnapshotColumnLabels(
+            PdfExportService.buildBalanceSheetSnapshotColumnEnds(
+              asOf: _endDate,
+              viewType: _viewType,
+              periodCount: _periodCount,
+            ),
+            _viewType,
+            _endDate,
+          )
+        : _service.buildBucketLabels(_startDate, _endDate, _viewType);
+    if (labels.length > PdfExportService.maxColumns) {
+      setState(() {
+        _validationError =
+            'Too many columns selected. Reduce range to ${PdfExportService.maxColumns} or less.';
+      });
+      return;
+    }
 
     setState(() => _isExporting = true);
     try {
-      final DateTime startForExport = widget.useSingleDate
-          ? _endDate
-          : _startDate;
-      final DateTime endForExport = _endDate;
-      final PdfViewType viewTypeForExport = widget.useSingleDate
-          ? PdfViewType.monthly
-          : _viewType;
-      final request = PdfExportRequest(
-        startDate: startForExport,
-        endDate: endForExport,
-        viewType: viewTypeForExport,
-        templateVariant: PdfTemplateVariant.templateA,
-        companyName: widget.companyName,
-        companyAddress: widget.companyAddress,
-        logoBytes: widget.logoBytes,
-      );
+      late final PdfExportRequest request;
+      if (_isBalanceSheetAdvanced) {
+        final ends = PdfExportService.buildBalanceSheetSnapshotColumnEnds(
+          asOf: _endDate,
+          viewType: _viewType,
+          periodCount: _periodCount,
+        );
+        request = PdfExportRequest(
+          startDate: ends.first,
+          endDate: _endDate,
+          viewType: _viewType,
+          templateVariant: PdfTemplateVariant.templateA,
+          companyName: widget.companyName,
+          companyAddress: widget.companyAddress,
+          logoBytes: widget.logoBytes,
+          balanceSheetSnapshotEnds: ends,
+        );
+      } else {
+        final DateTime startForExport = widget.useSingleDate
+            ? _endDate
+            : _startDate;
+        final DateTime endForExport = _endDate;
+        final PdfViewType viewTypeForExport = widget.useSingleDate
+            ? PdfViewType.monthly
+            : _viewType;
+        request = PdfExportRequest(
+          startDate: startForExport,
+          endDate: endForExport,
+          viewType: viewTypeForExport,
+          templateVariant: PdfTemplateVariant.templateA,
+          companyName: widget.companyName,
+          companyAddress: widget.companyAddress,
+          logoBytes: widget.logoBytes,
+        );
+      }
       if (widget.onExport != null) {
         await widget.onExport!(request);
       } else {
@@ -246,7 +317,23 @@ class _PdfExportDialogState extends State<_PdfExportDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final labels = _service.buildBucketLabels(_startDate, _endDate, _viewType);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final dropdownFg = isDark ? Colors.white : Colors.black87;
+    final dropdownMenuBg =
+        isDark ? const Color(0xFF1E293B) : theme.colorScheme.surface;
+
+    final labels = _isBalanceSheetAdvanced
+        ? PdfExportService.buildBalanceSheetSnapshotColumnLabels(
+            PdfExportService.buildBalanceSheetSnapshotColumnEnds(
+              asOf: _endDate,
+              viewType: _viewType,
+              periodCount: _periodCount,
+            ),
+            _viewType,
+            _endDate,
+          )
+        : _service.buildBucketLabels(_startDate, _endDate, _viewType);
     final hasError = _validationError != null;
 
     return Dialog(
@@ -264,7 +351,66 @@ class _PdfExportDialogState extends State<_PdfExportDialog> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 16),
-              if (widget.useSingleDate)
+              if (_isBalanceSheetAdvanced) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: _dateTile(
+                        label: 'As Of Date',
+                        value: _endDate,
+                        onTap: _pickEndDate,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Text(
+                      'Number of periods',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 12),
+                    DropdownButton<int>(
+                      value: _periodCount,
+                      dropdownColor: dropdownMenuBg,
+                      style: TextStyle(
+                        color: dropdownFg,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      iconEnabledColor: dropdownFg,
+                      underline: Container(
+                        height: 1,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.35)
+                            : Colors.black.withValues(alpha: 0.35),
+                      ),
+                      items: [1, 2, 3, 4, 5]
+                          .map(
+                            (n) => DropdownMenuItem<int>(
+                              value: n,
+                              child: Text(
+                                '$n',
+                                style: TextStyle(
+                                  color: dropdownFg,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() {
+                          _periodCount = v;
+                          _validate();
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ] else if (widget.useSingleDate)
                 Row(
                   children: [
                     Expanded(
@@ -296,9 +442,10 @@ class _PdfExportDialogState extends State<_PdfExportDialog> {
                     ),
                   ],
                 ),
-              const SizedBox(height: 14),
+              if (!_isBalanceSheetAdvanced) const SizedBox(height: 14),
+              if (_isBalanceSheetAdvanced) const SizedBox(height: 8),
               const Text(
-                'View Type',
+                'Frequency',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
@@ -374,7 +521,11 @@ class _PdfExportDialogState extends State<_PdfExportDialog> {
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(
-                    onPressed: _isExporting ? null : _runExport,
+                    onPressed: (_isExporting ||
+                            hasError ||
+                            labels.length > PdfExportService.maxColumns)
+                        ? null
+                        : _runExport,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(
                         0xFF1E3A8A,

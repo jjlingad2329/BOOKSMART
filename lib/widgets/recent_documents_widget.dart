@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/modules/user/controllers/tax_document_controller.dart';
 import 'package:get/get.dart';
@@ -6,20 +8,58 @@ import 'package:booksmart/utils/downloader.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as pdf_gen;
 import 'package:booksmart/models/user_document_model.dart';
+import 'package:intl/intl.dart';
 
-class RecentDocumentsWidget extends StatelessWidget {
+class RecentDocumentsWidget extends StatefulWidget {
   final String? type;
   final double topMargin;
-  const RecentDocumentsWidget({super.key, this.type, this.topMargin = 32});
+
+  /// Section header (e.g. "Recently Added" on balance sheet).
+  final String sectionTitle;
+
+  /// When true, subtitle includes upload date from [UserDocument.createdAt].
+  final bool showUploadDateInSubtitle;
+
+  /// When true, image MIME types show a small network thumbnail.
+  final bool useImageThumbnailWhenPossible;
+
+  /// When true, show a delete control with confirmation.
+  final bool showDeleteAction;
+
+  /// Template PDF export icon in the row trailing area.
+  final bool showExportTemplateAction;
+
+  /// When true, show the "View All" action in header.
+  final bool showViewAllAction;
+
+  const RecentDocumentsWidget({
+    super.key,
+    this.type,
+    this.topMargin = 32,
+    this.sectionTitle = 'Recently Uploaded',
+    this.showUploadDateInSubtitle = false,
+    this.useImageThumbnailWhenPossible = false,
+    this.showDeleteAction = false,
+    this.showExportTemplateAction = true,
+    this.showViewAllAction = true,
+  });
+
+  @override
+  State<RecentDocumentsWidget> createState() => _RecentDocumentsWidgetState();
+}
+
+class _RecentDocumentsWidgetState extends State<RecentDocumentsWidget> {
+  bool _requestedInitialRefresh = false;
 
   void _exportTemplate(UserDocument doc, BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final ScreenshotController screenshotController = ScreenshotController();
 
       // Render the dialog off-screen accurately matching the exact visual UI rendering
       final Uint8List imageBytes = await screenshotController.captureFromWidget(
         Directionality(
-          textDirection: TextDirection.ltr,
+          textDirection: ui.TextDirection.ltr,
           child: Theme(
             data: Theme.of(context),
             child: MediaQuery(
@@ -60,14 +100,83 @@ class RecentDocumentsWidget extends StatelessWidget {
       String filename = '${doc.name.replaceAll(" ", "_")}_Template.pdf';
       await downloadFile(filename, bytes, mimeType: 'application/pdf');
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Template PDF exported successfully!')),
       );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to export PDF template')));
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Failed to export PDF template')),
+      );
     }
+  }
+
+  static final _uploadDateFmt = DateFormat.yMMMd();
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    TaxDocumentController ctrl,
+    UserDocument doc,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete file?'),
+        content: Text(
+          'Remove "${doc.name}" from your uploaded documents? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ctrl.deleteDocument(doc);
+    }
+  }
+
+  Widget _leadingPreview(UserDocument doc) {
+    final mime = doc.mimeType?.toLowerCase() ?? '';
+    final isImage =
+        widget.useImageThumbnailWhenPossible && mime.startsWith('image/');
+    if (!isImage) {
+      return Container(
+        width: 48,
+        height: 48,
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          TaxDocumentController.iconForMime(doc.mimeType),
+          color: const Color(0xFFEAB308),
+          size: 22,
+        ),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: Image.network(
+          doc.fileUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Icon(
+            TaxDocumentController.iconForMime(doc.mimeType),
+            color: const Color(0xFFEAB308),
+            size: 22,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -83,19 +192,46 @@ class RecentDocumentsWidget extends StatelessWidget {
         return const SizedBox.shrink();
       }
 
+      if (!_requestedInitialRefresh &&
+          !ctrl.isLoading.value &&
+          ctrl.documents.isEmpty) {
+        _requestedInitialRefresh = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ctrl.fetchDocuments();
+        });
+      }
+
       // Filter documents by type if provided
       var filteredDocs = ctrl.documents.toList();
-      if (type != null) {
+      if (widget.type != null) {
         filteredDocs = filteredDocs.where((doc) {
           final cat = doc.category?.toLowerCase() ?? '';
-          final searchType = type!.toLowerCase();
+          final parsedCategory =
+              (doc.parsedData?['document_category']?.toString() ?? '')
+                  .toLowerCase();
+          final combined = '$cat $parsedCategory';
+          final searchType = widget.type!.toLowerCase();
 
-          if (cat.contains(searchType) || cat == searchType) return true;
+          if (combined.contains(searchType) || combined == searchType) {
+            return true;
+          }
 
-          if (searchType == 'pnl' && cat.contains('profit')) return true;
-          if (searchType == 'bs' && cat.contains('balance')) return true;
-          if (searchType == 'cf' && cat.contains('cash')) return true;
-          if (searchType == 'pl' && cat.contains('profit')) return true;
+          if (searchType == 'pnl' &&
+              (combined.contains('profit') || combined.contains('income'))) {
+            return true;
+          }
+          if (searchType == 'bs' &&
+              (combined.contains('balance') ||
+                  combined.contains('statement_of_financial_position') ||
+                  combined.contains('financial position'))) {
+            return true;
+          }
+          if (searchType == 'cf' && combined.contains('cash')) return true;
+          if (searchType == 'pl' &&
+              (combined.contains('profit') || combined.contains('income'))) {
+            return true;
+          }
 
           return false;
         }).toList();
@@ -108,7 +244,7 @@ class RecentDocumentsWidget extends StatelessWidget {
       final recentDocs = filteredDocs.take(5).toList();
 
       return Padding(
-        padding: EdgeInsets.only(top: topMargin),
+        padding: EdgeInsets.only(top: widget.topMargin),
         child: Container(
           decoration: BoxDecoration(
             color: cardColor,
@@ -134,20 +270,20 @@ class RecentDocumentsWidget extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const AppText(
-                      "Recently Uploaded",
+                    AppText(
+                      widget.sectionTitle,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
-                    TextButton(
-                      onPressed: () =>
-                          Get.toNamed('/tax-filling'), // Adjust route if needed
-                      child: const AppText(
-                        "View All",
-                        color: Color(0xFFEAB308),
-                        fontSize: 14,
+                    if (widget.showViewAllAction)
+                      TextButton(
+                        onPressed: () => Get.toNamed('/tax-filling'),
+                        child: const AppText(
+                          "View All",
+                          color: Color(0xFFEAB308),
+                          fontSize: 14,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -161,62 +297,77 @@ class RecentDocumentsWidget extends StatelessWidget {
                 ),
                 itemBuilder: (context, index) {
                   final doc = recentDocs[index];
+                  final uploaded =
+                      widget.showUploadDateInSubtitle
+                          ? 'Uploaded ${_uploadDateFmt.format(doc.createdAt.toLocal())}'
+                          : null;
+                  final subtitleParts = <String>[
+                    if (uploaded != null) uploaded,
+                    doc.category ?? 'Uncategorized',
+                    doc.taxYear ?? 'N/A',
+                  ];
                   return ListTile(
-                    onTap: () {
-                      Get.dialog(StatementViewerDialog(document: doc));
-                    },
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        TaxDocumentController.iconForMime(doc.mimeType),
-                        color: const Color(0xFFEAB308),
-                        size: 20,
-                      ),
-                    ),
+                    leading: _leadingPreview(doc),
                     title: AppText(
                       doc.name,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
                     subtitle: AppText(
-                      "${doc.category ?? 'Uncategorized'} • ${doc.taxYear ?? 'N/A'}",
+                      subtitleParts.join(' • '),
                       fontSize: 12,
                       color: Colors.white54,
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        AppText(
-                          doc.fileSizeLabel,
-                          fontSize: 12,
-                          color: Colors.white38,
+                        if (doc.fileSizeLabel.isNotEmpty) ...[
+                          AppText(
+                            doc.fileSizeLabel,
+                            fontSize: 12,
+                            color: Colors.white38,
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        TextButton(
+                          onPressed: () {
+                            Get.dialog(StatementViewerDialog(document: doc));
+                          },
+                          child: const AppText(
+                            'View',
+                            color: Color(0xFFEAB308),
+                            fontSize: 13,
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        Tooltip(
-                          message: "Export Template",
-                          child: InkWell(
-                            onTap: () => _exportTemplate(doc, context),
-                            borderRadius: BorderRadius.circular(4),
-                            child: const Padding(
-                              padding: EdgeInsets.all(4.0),
-                              child: Icon(
-                                Icons.download,
-                                size: 16,
-                                color: Color(0xFF19C37D),
+                        if (widget.showDeleteAction) ...[
+                          IconButton(
+                            tooltip: 'Delete file',
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.redAccent,
+                              size: 22,
+                            ),
+                            onPressed: () =>
+                                _confirmDelete(context, ctrl, doc),
+                          ),
+                        ],
+                        if (widget.showExportTemplateAction) ...[
+                          Tooltip(
+                            message: 'Export Template',
+                            child: InkWell(
+                              onTap: () => _exportTemplate(doc, context),
+                              borderRadius: BorderRadius.circular(4),
+                              child: const Padding(
+                                padding: EdgeInsets.all(4.0),
+                                child: Icon(
+                                  Icons.download,
+                                  size: 16,
+                                  color: Color(0xFF19C37D),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(
-                          Icons.open_in_new,
-                          size: 14,
-                          color: Colors.white24,
-                        ),
+                        ],
                       ],
                     ),
                   );

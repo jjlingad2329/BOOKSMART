@@ -130,20 +130,26 @@ class BalanceSheetExcelService {
     );
     final currencyStyle = excel_lib.CellStyle(
       numberFormat: const excel_lib.CustomNumericNumFormat(
-        formatCode: r'$#,##0.00;[Red]-$#,##0.00',
+        formatCode: r'$#,##0.00;[Red]($#,##0.00)',
       ),
       horizontalAlign: excel_lib.HorizontalAlign.Right,
     );
     final negativeCurrencyStyle = excel_lib.CellStyle(
       fontColorHex: excel_lib.ExcelColor.fromHexString('FFBE4141'),
       numberFormat: const excel_lib.CustomNumericNumFormat(
-        formatCode: r'$#,##0.00;[Red]-$#,##0.00',
+        formatCode: r'$#,##0.00;[Red]($#,##0.00)',
       ),
       horizontalAlign: excel_lib.HorizontalAlign.Right,
     );
     final dollarStyle = excel_lib.CellStyle(
       bold: true,
       horizontalAlign: excel_lib.HorizontalAlign.Center,
+    );
+    final emptySymbolStyle = excel_lib.CellStyle(
+      horizontalAlign: excel_lib.HorizontalAlign.Center,
+    );
+    final emptyAmountStyle = excel_lib.CellStyle(
+      horizontalAlign: excel_lib.HorizontalAlign.Right,
     );
     final totalLabelStyle = excel_lib.CellStyle(
       bold: true,
@@ -159,7 +165,7 @@ class BalanceSheetExcelService {
       bold: true,
       backgroundColorHex: excel_lib.ExcelColor.fromHexString('FFE7F1FC'),
       numberFormat: const excel_lib.CustomNumericNumFormat(
-        formatCode: r'$#,##0.00;[Red]-$#,##0.00',
+        formatCode: r'$#,##0.00;[Red]($#,##0.00)',
       ),
       horizontalAlign: excel_lib.HorizontalAlign.Right,
     );
@@ -168,7 +174,7 @@ class BalanceSheetExcelService {
       fontColorHex: excel_lib.ExcelColor.fromHexString('FFFFFFFF'),
       backgroundColorHex: excel_lib.ExcelColor.fromHexString('FF133E6E'),
       numberFormat: const excel_lib.CustomNumericNumFormat(
-        formatCode: r'$#,##0.00;[Red]-$#,##0.00',
+        formatCode: r'$#,##0.00;[Red]($#,##0.00)',
       ),
       horizontalAlign: excel_lib.HorizontalAlign.Right,
     );
@@ -292,11 +298,12 @@ class BalanceSheetExcelService {
     sheet.setRowHeight(3, 18);
     for (int c = 0; c < colCount; c++) {
       if (c == labelCol) {
-        sheet.setColumnWidth(c, 38);
+        sheet.setColumnWidth(c, 40);
       } else if (c.isOdd) {
-        sheet.setColumnWidth(c, 3.8);
+        sheet.setColumnWidth(c, 5.2);
       } else {
-        sheet.setColumnWidth(c, 12.8);
+        // Wide enough for $#,##0.00 so Excel does not show ####### in narrow columns.
+        sheet.setColumnWidth(c, 24);
       }
     }
 
@@ -406,19 +413,37 @@ class BalanceSheetExcelService {
           );
 
           for (int i = 0; i < periodCount; i++) {
-            final double value = row.valuesByPeriod[periods[i]] ?? 0;
-            setCell(
-              symbolColForPeriod(i),
-              rowCursor,
-              excel_lib.TextCellValue('\$'),
-              dollarStyle,
-            );
-            setCell(
-              amountColForPeriod(i),
-              rowCursor,
-              excel_lib.DoubleCellValue(value),
-              value < 0 ? negativeCurrencyStyle : currencyStyle,
-            );
+            final String periodKey = periods[i];
+            final bool hasKey = row.valuesByPeriod.containsKey(periodKey);
+            final double value = row.valuesByPeriod[periodKey] ?? 0;
+            final bool isEmpty = !hasKey || value.abs() < 1e-9;
+            if (isEmpty) {
+              setCell(
+                symbolColForPeriod(i),
+                rowCursor,
+                excel_lib.TextCellValue(''),
+                emptySymbolStyle,
+              );
+              setCell(
+                amountColForPeriod(i),
+                rowCursor,
+                excel_lib.TextCellValue(''),
+                emptyAmountStyle,
+              );
+            } else {
+              setCell(
+                symbolColForPeriod(i),
+                rowCursor,
+                excel_lib.TextCellValue('\$'),
+                dollarStyle,
+              );
+              setCell(
+                amountColForPeriod(i),
+                rowCursor,
+                excel_lib.DoubleCellValue(value),
+                value < 0 ? negativeCurrencyStyle : currencyStyle,
+              );
+            }
           }
           final String firstPeriodCol = _columnLetter(amountColForPeriod(0));
           final String lastPeriodCol = _columnLetter(
@@ -776,7 +801,7 @@ class BalanceSheetExcelService {
       balanceCheckStyle,
     );
 
-    final List<int>? bytes = excel.save();
+    final List<int>? bytes = excel.encode();
     if (bytes == null) return;
 
     final List<int> groupedBytes = _applyRowGroupingToFirstSheet(
