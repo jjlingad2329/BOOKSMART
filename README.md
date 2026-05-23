@@ -58,3 +58,9 @@ fixed or percentage
 for meals it is 50%
 
 2027 60%
+
+
+1. seperate meals and entertamaint from the admin panel
+2. implment deduction rules as per excel sheet with more complexity and dynamic range
+3. mprove AI strageies card -> move butotn to roght, not a long button
+4. Toriana will send us UX and we will entertain ... 
