@@ -65,7 +65,8 @@ class _AiStrategyPageState extends State<AiStrategyPage> {
                         CircularPercentIndicator(
                           radius: 60.0,
                           lineWidth: 8.0,
-                          percent: AiStrategyController.deductionOptimizationPercent,
+                          percent:
+                              AiStrategyController.deductionOptimizationPercent,
                           animation: true,
                           animationDuration: 1200,
                           circularStrokeCap: CircularStrokeCap.round,
@@ -110,7 +111,8 @@ class _AiStrategyPageState extends State<AiStrategyPage> {
                     _buildStatCard(
                       context,
                       title: "Potential Tax Savings",
-                      amount: '\$${controller.totalPotentialSavings.toStringAsFixed(0)}',
+                      amount:
+                          '\$${controller.totalPotentialSavings.toStringAsFixed(0)}',
                       color: greenColor,
                     ),
                   ],
@@ -303,19 +305,22 @@ class _AiStrategyPageState extends State<AiStrategyPage> {
                   const SizedBox(height: 12),
 
                   /// CTA
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: SizedBox(
-                      height: 32,
-                      child: AppButton(
-                        buttonText: "Ask BookSmart AI",
-                        onTapFunction: () {
-                          goToAiChatScreen(strategy: strategy);
-                        },
-                        fontSize: 11,
-                        radius: 8,
+                  /// CTA
+                  Row(
+                    children: [
+                      const Spacer(),
+                      SizedBox(
+                        height: 32,
+                        child: AppButton(
+                          buttonText: "Ask BookSmart AI",
+                          onTapFunction: () {
+                            goToAiChatScreen(strategy: strategy);
+                          },
+                          fontSize: 11,
+                          radius: 8,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),

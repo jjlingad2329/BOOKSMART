@@ -3,6 +3,7 @@ import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/helpers/currency_formatter.dart';
 import 'package:booksmart/models/transaction_model.dart';
 import 'package:booksmart/modules/admin/controllers/category_controler.dart';
+import 'package:booksmart/modules/user/controllers/grouped_transaction_controller.dart';
 import 'package:booksmart/modules/user/controllers/organization_controller.dart';
 import 'package:booksmart/supabase/tables.dart';
 import 'package:booksmart/utils/supabase.dart';
@@ -36,9 +37,8 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
 
   // UI state variables
   final Set<int> _expandedCategoryIds = {};
-  bool _useMockData = false;
+  String _selectedDeductionType = 'Federal';
   double _totalAmount = 0.0;
-  double _totalDeductions = 0.0;
   int _totalTransactionsCount = 0;
   int _matchedTransactionsCount = 0;
   int _unmatchedTransactionsCount = 0;
@@ -54,120 +54,6 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
     Color(0xFF5856D6), // Indigo
     Color(0xFF64748B), // Slate
     Color(0xFF8E8E93), // Grey
-  ];
-
-  // Mock data definitions for preview
-  final Map<String, double> mockPieMap = const {
-    'Advertising': 3110.00,
-    'Meals & Entertainment': 2660.00,
-    'Travel': 1960.00,
-    'Freight & Delivery': 1580.00,
-    'Interest Earned': 1270.00,
-    'Miscellaneous': 1160.00,
-    'Purchases - COS': 1040.00,
-    'Penalties & Settlements': 730.00,
-    'Discounts': 470.00,
-    'Other': 671.60,
-  };
-
-  final List<Map<String, dynamic>> mockRpcResults = const [
-    {
-      'sub_category_id': -1,
-      'name': 'Advertising',
-      'total_amount': 29850.00,
-      'state_deduction': 3110.00,
-      'federal_deduction': 3110.00,
-      'deduction_rate': 20.82,
-      'transaction_count': 42,
-    },
-    {
-      'sub_category_id': -2,
-      'name': 'Meals & Entertainment',
-      'total_amount': 26480.50,
-      'state_deduction': 1330.00,
-      'federal_deduction': 1330.00,
-      'deduction_rate': 10.05,
-      'transaction_count': 38,
-    },
-    {
-      'sub_category_id': -3,
-      'name': 'Travel',
-      'total_amount': 19620.00,
-      'state_deduction': 980.00,
-      'federal_deduction': 980.00,
-      'deduction_rate': 10.00,
-      'transaction_count': 26,
-    },
-    {
-      'sub_category_id': -4,
-      'name': 'Freight & Delivery',
-      'total_amount': 15840.00,
-      'state_deduction': 790.00,
-      'federal_deduction': 790.00,
-      'deduction_rate': 9.97,
-      'transaction_count': 19,
-    },
-    {
-      'sub_category_id': -5,
-      'name': 'Interest Earned',
-      'total_amount': 12780.00,
-      'state_deduction': 635.00,
-      'federal_deduction': 635.00,
-      'deduction_rate': 9.94,
-      'transaction_count': 12,
-    },
-    {
-      'sub_category_id': -6,
-      'name': 'Miscellaneous',
-      'total_amount': 11520.00,
-      'state_deduction': 580.00,
-      'federal_deduction': 580.00,
-      'deduction_rate': 10.07,
-      'transaction_count': 16,
-    },
-  ];
-
-  final List<Map<String, dynamic>> mockAdvertisingTransactions = const [
-    {
-      'date': 'May 21, 2026',
-      'description': 'Facebook Ads',
-      'merchant': 'Facebook',
-      'total_amount': 250.00,
-      'deduction_amount': 250.00,
-      'deduction_rate': '100%',
-    },
-    {
-      'date': 'May 20, 2026',
-      'description': 'Google Ads',
-      'merchant': 'Google LLC',
-      'total_amount': 620.00,
-      'deduction_amount': 620.00,
-      'deduction_rate': '100%',
-    },
-    {
-      'date': 'May 19, 2026',
-      'description': 'Instagram Promotion',
-      'merchant': 'Meta Platforms',
-      'total_amount': 180.00,
-      'deduction_amount': 180.00,
-      'deduction_rate': '100%',
-    },
-    {
-      'date': 'May 18, 2026',
-      'description': 'LinkedIn Campaign',
-      'merchant': 'LinkedIn Corp',
-      'total_amount': 350.00,
-      'deduction_amount': 350.00,
-      'deduction_rate': '100%',
-    },
-    {
-      'date': 'May 17, 2026',
-      'description': 'Twitter Ads',
-      'merchant': 'Twitter, Inc.',
-      'total_amount': 200.00,
-      'deduction_amount': 200.00,
-      'deduction_rate': '100%',
-    },
   ];
 
   @override
@@ -196,21 +82,24 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
 
       _userStateId = org.stateId;
 
-      var rpcParams = {
-        'p_org_id': org.id,
-        'p_state_id': _userStateId,
-        'p_start_date': _activeRange.start.toIso8601String(),
-        'p_end_date': _activeRange.end.toIso8601String(),
-      };
-
-      dev.log(rpcParams.toString());
-
-      final res = await supabase.rpc(
-        'get_subcategory_totals_with_deductions',
-        params: rpcParams,
+      final tag = getGroupedTransactionControllerTag(
+        _activeRange.start,
+        _activeRange.end,
       );
+      final GroupedTransactionController groupedCtrl =
+          Get.isRegistered<GroupedTransactionController>(tag: tag)
+          ? Get.find<GroupedTransactionController>(tag: tag)
+          : Get.put(
+              GroupedTransactionController(
+                startDate: _activeRange.start,
+                endDate: _activeRange.end,
+              ),
+              tag: tag,
+            );
 
-      _rpcResults = res as List<dynamic>;
+      _rpcResults = await groupedCtrl.loadSubcategoryTotalsWithDeductions(
+        _userStateId,
+      );
       _txBySubCat.clear();
 
       final txsRes = await supabase
@@ -235,33 +124,18 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
         tempTotalAmount += tx.amount.abs();
       }
 
-      double tempTotalDeductions = 0.0;
-      for (var row in _rpcResults) {
-        final stateDed = (row['state_deduction'] ?? 0.0) as double;
-        final fedDed = (row['federal_deduction'] ?? 0.0) as double;
-        tempTotalDeductions += stateDed + fedDed;
-      }
-
       _totalAmount = tempTotalAmount;
-      _totalDeductions = tempTotalDeductions;
       _totalTransactionsCount = allTxs.length;
       _matchedTransactionsCount = allTxs.where((tx) => tx.isAiVerified).length;
       _unmatchedTransactionsCount = allTxs
           .where((tx) => !tx.isAiVerified)
           .length;
 
-      if (_totalTransactionsCount == 0 && _rpcResults.isEmpty) {
-        _useMockData = true;
-      } else {
-        _useMockData = false;
-      }
-
       if (_catCtrl.states.isEmpty) {
         await _catCtrl.fetchStates();
       }
     } catch (e) {
       dev.log("Error loading AI Deduction data: $e");
-      _useMockData = true;
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -294,9 +168,6 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
   }
 
   Map<String, double> _computePieData() {
-    if (_useMockData) {
-      return mockPieMap;
-    }
     final Map<String, double> map = {};
     for (var row in _rpcResults) {
       final subId = row['sub_category_id'] as int;
@@ -427,33 +298,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
   }
 
   Widget _buildSubTable(int subCatId, String categoryName, int txCount) {
-    List<dynamic> subTxs = [];
-    if (_useMockData) {
-      if (categoryName == 'Advertising') {
-        subTxs = mockAdvertisingTransactions;
-      } else {
-        subTxs = [
-          {
-            'date': 'May 21, 2026',
-            'description': 'Office Supplies',
-            'merchant': 'Staples',
-            'total_amount': 120.00,
-            'deduction_amount': 120.00,
-            'deduction_rate': '100%',
-          },
-          {
-            'date': 'May 15, 2026',
-            'description': 'Software Subscription',
-            'merchant': 'SaaS Corp',
-            'total_amount': 85.00,
-            'deduction_amount': 85.00,
-            'deduction_rate': '100%',
-          },
-        ];
-      }
-    } else {
-      subTxs = _txBySubCat[subCatId] ?? [];
-    }
+    List<dynamic> subTxs = _txBySubCat[subCatId] ?? [];
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
@@ -569,24 +414,14 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
               double dedAmt = 0.0;
               String rateStr = '';
 
-              if (_useMockData) {
-                final m = tx as Map<String, dynamic>;
-                dateStr = m['date'] ?? '';
-                descStr = m['description'] ?? '';
-                merchantStr = m['merchant'] ?? '';
-                totalAmt = m['total_amount'] ?? 0.0;
-                dedAmt = m['deduction_amount'] ?? 0.0;
-                rateStr = m['deduction_rate'] ?? '';
-              } else {
-                final t = tx as TransactionModel;
-                dateStr =
-                    '${_getMonthName(t.dateTime.month)} ${t.dateTime.day}, ${t.dateTime.year}';
-                descStr = t.description.isNotEmpty ? t.description : t.title;
-                merchantStr = t.title;
-                totalAmt = t.amount.abs();
-                dedAmt = t.deductible ? t.amount.abs() : 0.0;
-                rateStr = t.deductible ? '100%' : '0%';
-              }
+              final t = tx as TransactionModel;
+              dateStr =
+                  '${_getMonthName(t.dateTime.month)} ${t.dateTime.day}, ${t.dateTime.year}';
+              descStr = t.description.isNotEmpty ? t.description : t.title;
+              merchantStr = t.title;
+              totalAmt = t.amount.abs();
+              dedAmt = t.deductible ? t.amount.abs() : 0.0;
+              rateStr = t.deductible ? '100%' : '0%';
 
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10.0),
@@ -682,19 +517,6 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
               );
             }).toList(),
           const SizedBox(height: 12),
-          Center(
-            child: TextButton(
-              onPressed: () {},
-              child: Text(
-                'View all $txCount transactions',
-                style: const TextStyle(
-                  color: Color(0xFF2B7FFF),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -740,10 +562,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                 margin: const EdgeInsets.all(20),
                 width: 400,
                 decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Colors.grey.shade300,
-                    width: 1,
-                  ),
+                  border: Border.all(color: Colors.grey.shade300, width: 1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: ClipRRect(
@@ -762,10 +581,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
         }
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 12,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           border: Border.all(color: Colors.white.withOpacity(0.08)),
           borderRadius: BorderRadius.circular(8),
@@ -800,27 +616,38 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
       ),
     );
 
-    final refreshBtn = ElevatedButton.icon(
-      onPressed: _loadData,
-      icon: const Icon(Icons.sync, color: Colors.white, size: 16),
-      label: const Text(
-        'Refresh Data',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
-        ),
+    final deductionTypeDropdown = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        borderRadius: BorderRadius.circular(8),
+        color: const Color(0xFF0C2346).withOpacity(0.3),
       ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF2B7FFF),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 18,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedDeductionType,
+          dropdownColor: const Color(0xFF0C2346),
+          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: 16),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              setState(() {
+                _selectedDeductionType = newValue;
+              });
+            }
+          },
+          items: <String>['Federal', 'State']
+              .map<DropdownMenuItem<String>>((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value),
+            );
+          }).toList(),
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        elevation: 0,
       ),
     );
 
@@ -833,18 +660,14 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
           if (isVerySmall)
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                datePickerBtn,
-                const SizedBox(height: 12),
-                refreshBtn,
-              ],
+              children: [datePickerBtn, const SizedBox(height: 12), deductionTypeDropdown],
             )
           else
             Row(
               children: [
                 Expanded(child: datePickerBtn),
                 const SizedBox(width: 12),
-                Expanded(child: refreshBtn),
+                Expanded(child: deductionTypeDropdown),
               ],
             ),
         ],
@@ -859,11 +682,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
         const SizedBox(width: 16),
         Row(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            datePickerBtn,
-            const SizedBox(width: 12),
-            refreshBtn,
-          ],
+          children: [datePickerBtn, const SizedBox(width: 12), deductionTypeDropdown],
         ),
       ],
     );
@@ -878,9 +697,8 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
     int matchedTxs,
     int unmatchedTxs,
     double matchedPercent,
-    double unmatchedPercent, {
-    bool isLargeScreen = false,
-  }) {
+    double unmatchedPercent,
+  ) {
     final cards = [
       _buildStatCard(
         icon: LucideIcons.wallet,
@@ -935,51 +753,18 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
       ),
     ];
 
-    if (isLargeScreen) {
-      return Column(
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(child: cards[0]),
-                const SizedBox(width: 12),
-                Expanded(child: cards[1]),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(child: cards[2]),
-                const SizedBox(width: 12),
-                Expanded(child: cards[3]),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(child: cards[4]),
-                const SizedBox(width: 12),
-                Expanded(child: cards[5]),
-              ],
-            ),
-          ),
-        ],
-      );
-    }
-
     int crossAxisCount = 3;
     double childAspectRatio = 1.7;
 
     if (width < 600) {
       crossAxisCount = 1;
       childAspectRatio = 3.5;
-    } else if (width < 900) {
+    } else if (width < 1100) {
       crossAxisCount = 2;
       childAspectRatio = 2.0;
+    } else {
+      crossAxisCount = 2;
+      childAspectRatio = 2.2;
     }
 
     return GridView.builder(
@@ -1027,7 +812,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _formatCurrency(_useMockData ? 14671.60 : overall),
+                  _formatCurrency(overall),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -1037,7 +822,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
               ],
             ),
             chartValuesOptions: const ChartValuesOptions(
-              showChartValues: true,
+              showChartValues: false,
               showChartValuesInPercentage: true,
               showChartValuesOutside: true,
               decimalPlaces: 1,
@@ -1229,7 +1014,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
         ),
         child: const Center(
           child: Text(
-            'No deductions found matching filter',
+            'No transactions available',
             style: TextStyle(color: Colors.white54, fontSize: 14),
           ),
         ),
@@ -1328,35 +1113,16 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
           ),
           const Divider(color: Colors.white12, height: 1),
           ...rows.map((row) {
-            int subId = 0;
-            String categoryName = '';
-            double totalAmount = 0.0;
-            double totalDeductions = 0.0;
-            double deductionRate = 0.0;
-            int txCount = 0;
-
-            if (_useMockData) {
-              final m = row as Map<String, dynamic>;
-              subId = m['sub_category_id'] as int;
-              categoryName = m['name'] as String;
-              totalAmount = m['total_amount'] as double;
-              totalDeductions =
-                  (m['state_deduction'] as double) +
-                  (m['federal_deduction'] as double);
-              deductionRate = m['deduction_rate'] as double;
-              txCount = m['transaction_count'] as int;
-            } else {
-              subId = row['sub_category_id'] as int;
-              categoryName = _catCtrl.getSubCategoryName(subId);
-              totalAmount = (row['total_amount'] ?? 0.0) as double;
-              final stateDed = (row['state_deduction'] ?? 0.0) as double;
-              final fedDed = (row['federal_deduction'] ?? 0.0) as double;
-              totalDeductions = stateDed + fedDed;
-              deductionRate = totalAmount > 0
-                  ? (totalDeductions / totalAmount) * 100
-                  : 0.0;
-              txCount = _txBySubCat[subId]?.length ?? 0;
-            }
+            int subId = row['sub_category_id'] as int;
+            String categoryName = _catCtrl.getSubCategoryName(subId);
+            double totalAmount = (row['total_amount'] ?? 0.0) as double;
+            double stateDed = (row['state_deduction'] ?? 0.0) as double;
+            double fedDed = (row['federal_deduction'] ?? 0.0) as double;
+            double totalDeductions = _selectedDeductionType == 'Federal' ? fedDed : stateDed;
+            double deductionRate = totalAmount > 0
+                ? (totalDeductions / totalAmount) * 100
+                : 0.0;
+            int txCount = _txBySubCat[subId]?.length ?? 0;
 
             final isExpanded = _expandedCategoryIds.contains(subId);
             final categoryColor = getCategoryColor(categoryName);
@@ -1370,9 +1136,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                         _expandedCategoryIds.remove(subId);
                       } else {
                         _expandedCategoryIds.add(subId);
-                        if (!_useMockData) {
-                          _fetchSubCategoryTransactions(subId);
-                        }
+                        _fetchSubCategoryTransactions(subId);
                       }
                     });
                   },
@@ -1511,33 +1275,34 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
             return HSLColor.fromAHSL(1.0, hue, 0.65, 0.55).toColor();
           });
 
-    final totalAmt = _useMockData ? 146712.50 : _totalAmount;
-    final totalDeds = _useMockData ? 14671.60 : _totalDeductions;
+    final totalAmt = _totalAmount;
+    
+    double calculatedTotalDeductions = 0.0;
+    final List<MapEntry<String, double>> categoryDeductions = [];
+    for (var r in _rpcResults) {
+      final subId = r['sub_category_id'] as int;
+      final subName = _catCtrl.getSubCategoryName(subId);
+      final stateDed = (r['state_deduction'] ?? 0.0) as double;
+      final fedDed = (r['federal_deduction'] ?? 0.0) as double;
+      final totalDed = _selectedDeductionType == 'Federal' ? fedDed : stateDed;
+      
+      calculatedTotalDeductions += totalDed;
+      
+      if (totalDed > 0) {
+        categoryDeductions.add(MapEntry(subName, totalDed));
+      }
+    }
+    categoryDeductions.sort((a, b) => b.value.compareTo(a.value));
+
+    final totalDeds = calculatedTotalDeductions;
     final deductionRate = totalAmt > 0 ? (totalDeds / totalAmt) * 100 : 0.0;
-    final totalTxs = _useMockData ? 248 : _totalTransactionsCount;
-    final matchedTxs = _useMockData ? 235 : _matchedTransactionsCount;
-    final unmatchedTxs = _useMockData ? 13 : _unmatchedTransactionsCount;
+    final totalTxs = _totalTransactionsCount;
+    final matchedTxs = _matchedTransactionsCount;
+    final unmatchedTxs = _unmatchedTransactionsCount;
     final matchedPercent = totalTxs > 0 ? (matchedTxs / totalTxs) * 100 : 0.0;
     final unmatchedPercent = totalTxs > 0
         ? (unmatchedTxs / totalTxs) * 100
         : 0.0;
-
-    final List<MapEntry<String, double>> categoryDeductions = [];
-    if (_useMockData) {
-      categoryDeductions.addAll(mockPieMap.entries);
-    } else {
-      for (var r in _rpcResults) {
-        final subId = r['sub_category_id'] as int;
-        final subName = _catCtrl.getSubCategoryName(subId);
-        final stateDed = (r['state_deduction'] ?? 0.0) as double;
-        final fedDed = (r['federal_deduction'] ?? 0.0) as double;
-        final totalDed = stateDed + fedDed;
-        if (totalDed > 0) {
-          categoryDeductions.add(MapEntry(subName, totalDed));
-        }
-      }
-    }
-    categoryDeductions.sort((a, b) => b.value.compareTo(a.value));
 
     Color getCategoryColor(String name) {
       final idx = categoryDeductions.indexWhere((entry) => entry.key == name);
@@ -1547,20 +1312,14 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
       return Colors.grey;
     }
 
-    final List<dynamic> rows = _useMockData
-        ? mockRpcResults.where((r) {
-            if (_search.isEmpty) return true;
-            final name = r['name'] as String;
-            return name.toLowerCase().contains(_search.toLowerCase());
-          }).toList()
-        : _rpcResults.where((r) {
-            if (_search.isEmpty) return true;
-            final subId = r['sub_category_id'] as int;
-            return _catCtrl
-                .getSubCategoryName(subId)
-                .toLowerCase()
-                .contains(_search.toLowerCase());
-          }).toList();
+    final List<dynamic> rows = _rpcResults.where((r) {
+      if (_search.isEmpty) return true;
+      final subId = r['sub_category_id'] as int;
+      return _catCtrl
+          .getSubCategoryName(subId)
+          .toLowerCase()
+          .contains(_search.toLowerCase());
+    }).toList();
 
     return Scaffold(
       backgroundColor: primaryColor,
@@ -1581,39 +1340,35 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                       _buildHeader(width),
                       const SizedBox(height: 24),
                       if (isLargeScreen)
-                        IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                flex: 6,
-                                child: _buildPieChartCard(
-                                  pieMap,
-                                  colorList,
-                                  ordered,
-                                  overall,
-                                  getCategoryColor,
-                                  isExpanded: true,
-                                ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 6,
+                              child: _buildPieChartCard(
+                                pieMap,
+                                colorList,
+                                ordered,
+                                overall,
+                                getCategoryColor,
                               ),
-                              const SizedBox(width: 20),
-                              Expanded(
-                                flex: 5,
-                                child: _buildStatsGrid(
-                                  width,
-                                  totalAmt,
-                                  totalDeds,
-                                  deductionRate,
-                                  totalTxs,
-                                  matchedTxs,
-                                  unmatchedTxs,
-                                  matchedPercent,
-                                  unmatchedPercent,
-                                  isLargeScreen: true,
-                                ),
+                            ),
+                            const SizedBox(width: 20),
+                            Expanded(
+                              flex: 5,
+                              child: _buildStatsGrid(
+                                width,
+                                totalAmt,
+                                totalDeds,
+                                deductionRate,
+                                totalTxs,
+                                matchedTxs,
+                                unmatchedTxs,
+                                matchedPercent,
+                                unmatchedPercent,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         )
                       else
                         Column(

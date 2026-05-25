@@ -1,8 +1,6 @@
 import 'dart:developer';
-
 import 'package:booksmart/utils/supabase.dart';
 import 'package:get/get.dart';
-
 import 'organization_controller.dart';
 
 String getGroupedTransactionControllerTag(
@@ -40,5 +38,25 @@ class GroupedTransactionController extends GetxController {
     groupedTransactions = response;
 
     return response;
+  }
+
+  Future<List<dynamic>> loadSubcategoryTotalsWithDeductions(
+    int? stateId,
+  ) async {
+    var rpcParams = {
+      'p_org_id': organizationControllerInstance.currentOrganization?.id,
+      'p_state_id': stateId,
+      'p_start_date': startDate.toIso8601String(),
+      'p_end_date': endDate.toIso8601String(),
+    };
+
+    final dynamic response = await supabase.rpc(
+      'get_subcategory_totals_with_deductions',
+      params: rpcParams,
+    );
+
+    log("RPC: get_subcategory_totals_with_deductions: $response");
+
+    return response as List<dynamic>;
   }
 }
