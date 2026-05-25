@@ -281,7 +281,6 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
   }
 
   Widget _buildYearDropdown(FinancialReportController controller) {
-    final isDark = Get.isDarkMode;
     final int currentYear = DateTime.now().year;
     final List<int> years = List.generate(5, (index) => currentYear - index);
     final bool isSelected = _selectedFilterIdx == 4;
@@ -910,7 +909,10 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
     }
   }
 
-  void _exportExcel(FinancialReportController controller, PdfExportRequest request) async {
+  void _exportExcel(
+    FinancialReportController controller,
+    PdfExportRequest request,
+  ) async {
     await _exportExcelLikePdf(controller, request);
   }
 
@@ -926,7 +928,10 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
         request.viewType,
       );
       if (labels.isEmpty) {
-        showSnackBar('No periods available for selected date range.', isError: true);
+        showSnackBar(
+          'No periods available for selected date range.',
+          isError: true,
+        );
         return;
       }
 
@@ -945,7 +950,9 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
           .toList();
-      final line1 = addressLines.isNotEmpty ? addressLines.first : 'Address not available';
+      final line1 = addressLines.isNotEmpty
+          ? addressLines.first
+          : 'Address not available';
       final line2 = addressLines.length > 1 ? addressLines[1] : '';
       const headerBand = 'FF8596B0';
       const totalBand = 'FFEAEDF4';
@@ -1053,7 +1060,10 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       void mergeRow(int r, int fromC, int toC) {
         if (toC > fromC) {
           sheet.merge(
-            excel_lib.CellIndex.indexByColumnRow(columnIndex: fromC, rowIndex: r),
+            excel_lib.CellIndex.indexByColumnRow(
+              columnIndex: fromC,
+              rowIndex: r,
+            ),
             excel_lib.CellIndex.indexByColumnRow(columnIndex: toC, rowIndex: r),
           );
         }
@@ -1127,7 +1137,12 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
         setCell(0, row, excel_lib.TextCellValue(' $title'), sectionStyle);
         if (showPeriodsInHeader) {
           for (int i = 0; i < labels.length; i++) {
-            setCell(1 + i, row, excel_lib.TextCellValue(labels[i]), sectionPeriodStyle);
+            setCell(
+              1 + i,
+              row,
+              excel_lib.TextCellValue(labels[i]),
+              sectionPeriodStyle,
+            );
           }
         }
         sheet.setRowHeight(row, 21);
@@ -1138,13 +1153,20 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
           setCell(
             0,
             row,
-            excel_lib.TextCellValue(isTotal ? item.label : '     ${item.label}'),
+            excel_lib.TextCellValue(
+              isTotal ? item.label : '     ${item.label}',
+            ),
             isTotal ? totalLabelStyle : labelStyle,
           );
           for (int i = 0; i < labels.length; i++) {
             final double val = i < item.values.length ? item.values[i] : 0.0;
             if (!isTotal && val.abs() < 1e-12) {
-              setCell(1 + i, row, excel_lib.TextCellValue(''), emptyPeriodValueStyle);
+              setCell(
+                1 + i,
+                row,
+                excel_lib.TextCellValue(''),
+                emptyPeriodValueStyle,
+              );
             } else {
               setCell(
                 1 + i,
@@ -1154,8 +1176,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
               );
             }
           }
-        sheet.setRowHeight(row, isTotal ? 21 : 19);
-        row++;
+          sheet.setRowHeight(row, isTotal ? 21 : 19);
+          row++;
         }
         for (int c = 0; c <= labels.length; c++) {
           setCell(c, row, excel_lib.TextCellValue(''), labelStyle);
@@ -1166,20 +1188,17 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
 
       for (int i = 0; i < exportData.sections.length; i++) {
         final section = exportData.sections[i];
-        writeSection(
-          section.title,
-          section.rows,
-          showPeriodsInHeader: i == 0,
-        );
+        writeSection(section.title, section.rows, showPeriodsInHeader: i == 0);
       }
 
       // Final Net Income section to mirror PDF summary.
-      writeSection(
-        'Net Income',
-        [
-          PnlPdfRowData(label: 'Net Income (Loss)', values: exportData.netProfit, isBold: true),
-        ],
-      );
+      writeSection('Net Income', [
+        PnlPdfRowData(
+          label: 'Net Income (Loss)',
+          values: exportData.netProfit,
+          isBold: true,
+        ),
+      ]);
 
       final rawBytes = excel.encode();
       if (rawBytes == null) throw Exception('Unable to generate Excel file.');
@@ -1187,7 +1206,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       await downloadFile(
         '${orgName.replaceAll(' ', '_')}_Profit_Loss_Statement.xlsx',
         bytes,
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
     } catch (e, st) {
       dev.log('Excel Export Error: $e\n$st');
@@ -1396,10 +1416,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
           columnIndex: colGutter,
           rowIndex: 0,
         ),
-        excel_lib.CellIndex.indexByColumnRow(
-          columnIndex: lastCol,
-          rowIndex: 0,
-        ),
+        excel_lib.CellIndex.indexByColumnRow(columnIndex: lastCol, rowIndex: 0),
       );
       setCell(
         colGutter,
@@ -1417,15 +1434,16 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
           columnIndex: colLabel,
           rowIndex: 1,
         ),
-        excel_lib.CellIndex.indexByColumnRow(
-          columnIndex: lastCol,
-          rowIndex: 1,
-        ),
+        excel_lib.CellIndex.indexByColumnRow(columnIndex: lastCol, rowIndex: 1),
       );
       setCell(colLabel, 1, excel_lib.TextCellValue(orgName), companyTitleStyle);
 
-      setCell(colLabel, 2, excel_lib.TextCellValue('1234 Anytown St.'),
-          addressStyle);
+      setCell(
+        colLabel,
+        2,
+        excel_lib.TextCellValue('1234 Anytown St.'),
+        addressStyle,
+      );
       setCell(
         colYearEnd - 1,
         2,
@@ -1435,7 +1453,9 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       setCell(
         colYearEnd,
         2,
-        excel_lib.TextCellValue(DateFormat('MM/dd/yyyy').format(DateTime.now())),
+        excel_lib.TextCellValue(
+          DateFormat('MM/dd/yyyy').format(DateTime.now()),
+        ),
         baseStyle(
           fontSize: 11,
           fontColor: kTextDark,
@@ -1631,7 +1651,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       const kTaxes = <String>['tax'];
       const kAmortization = <String>['amortization'];
 
-      double netSales(int i) => rev(i, kAllRevenue) - rev(i, kRevenueDeductions);
+      double netSales(int i) =>
+          rev(i, kAllRevenue) - rev(i, kRevenueDeductions);
       double cogs(int i) => exp(i, kAllCogs);
       double opex(int i) => exp(i, kAllOpEx);
       double ebit(int i) => netSales(i) - cogs(i) - opex(i);
@@ -1715,7 +1736,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
   // ignore: unused_element
   void _exportExcelLegacy(FinancialReportController controller) async {
     try {
-      final start = _startDate ?? DateTime.now().subtract(const Duration(days: 89));
+      final start =
+          _startDate ?? DateTime.now().subtract(const Duration(days: 89));
       final end = _endDate ?? DateTime.now();
       if (end.isBefore(start)) {
         showSnackBar('End date must be on or after start date.', isError: true);
@@ -1724,7 +1746,10 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       final exportData = await _buildPnlExportData(start, end);
       final years = <int>[for (int y = start.year; y <= end.year; y++) y];
       if (years.length > 5) {
-        showSnackBar('Profit & Loss export supports max 5 years.', isError: true);
+        showSnackBar(
+          'Profit & Loss export supports max 5 years.',
+          isError: true,
+        );
         return;
       }
 
@@ -1733,14 +1758,14 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
         int year,
         String category,
       ) {
-          double total = 0;
-          periodicMap.forEach((key, row) {
+        double total = 0;
+        periodicMap.forEach((key, row) {
           if (key.startsWith('$year-')) {
-              total += row[category] ?? 0;
-            }
-          });
-          return total;
-        }
+            total += row[category] ?? 0;
+          }
+        });
+        return total;
+      }
 
       double monthValue(
         Map<String, Map<String, double>> periodicMap,
@@ -1907,7 +1932,9 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
         for (int m = 1; m <= 12; m++) {
           months.add(colCursor + m);
         }
-        yearBlocks.add(_ExcelYearBlock(year: y, totalCol: colCursor, monthCols: months));
+        yearBlocks.add(
+          _ExcelYearBlock(year: y, totalCol: colCursor, monthCols: months),
+        );
         colCursor += 13;
       }
       final lastCol = colCursor - 1;
@@ -1939,7 +1966,12 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       );
       setCell(0, 1, excel_lib.TextCellValue(orgName), companyTitleStyle);
       setCell(0, 2, excel_lib.TextCellValue('1234 Anytown St.'), metaInfoStyle);
-      setCell(0, 3, excel_lib.TextCellValue('City, State  12345'), metaInfoStyle);
+      setCell(
+        0,
+        3,
+        excel_lib.TextCellValue('City, State  12345'),
+        metaInfoStyle,
+      );
       final rightStart = (lastCol - 4).clamp(0, lastCol);
       setCell(
         rightStart,
@@ -1958,11 +1990,17 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
         asOfStyle,
       );
       sheet.merge(
-        excel_lib.CellIndex.indexByColumnRow(columnIndex: rightStart, rowIndex: 2),
+        excel_lib.CellIndex.indexByColumnRow(
+          columnIndex: rightStart,
+          rowIndex: 2,
+        ),
         excel_lib.CellIndex.indexByColumnRow(columnIndex: lastCol, rowIndex: 2),
       );
       sheet.merge(
-        excel_lib.CellIndex.indexByColumnRow(columnIndex: rightStart, rowIndex: 4),
+        excel_lib.CellIndex.indexByColumnRow(
+          columnIndex: rightStart,
+          rowIndex: 4,
+        ),
         excel_lib.CellIndex.indexByColumnRow(columnIndex: lastCol, rowIndex: 4),
       );
       sheet.setRowHeight(0, 36);
@@ -1975,11 +2013,27 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       int row = 6;
       setCell(0, row, excel_lib.TextCellValue(''), subHeaderStyle);
       for (final b in yearBlocks) {
-        setCell(b.totalCol, row, excel_lib.TextCellValue('${b.year}'), subHeaderStyle);
-        setCell(b.monthCols.first, row, excel_lib.TextCellValue(''), subHeaderStyle);
+        setCell(
+          b.totalCol,
+          row,
+          excel_lib.TextCellValue('${b.year}'),
+          subHeaderStyle,
+        );
+        setCell(
+          b.monthCols.first,
+          row,
+          excel_lib.TextCellValue(''),
+          subHeaderStyle,
+        );
         sheet.merge(
-          excel_lib.CellIndex.indexByColumnRow(columnIndex: b.totalCol, rowIndex: row),
-          excel_lib.CellIndex.indexByColumnRow(columnIndex: b.monthCols.last, rowIndex: row),
+          excel_lib.CellIndex.indexByColumnRow(
+            columnIndex: b.totalCol,
+            rowIndex: row,
+          ),
+          excel_lib.CellIndex.indexByColumnRow(
+            columnIndex: b.monthCols.last,
+            rowIndex: row,
+          ),
         );
       }
       row++;
@@ -1992,8 +2046,13 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
           headerStyle,
         );
         for (int m = 0; m < 12; m++) {
-          setCell(b.monthCols[m], row, excel_lib.TextCellValue(monthNames[m]), headerStyle);
-      }
+          setCell(
+            b.monthCols[m],
+            row,
+            excel_lib.TextCellValue(monthNames[m]),
+            headerStyle,
+          );
+        }
       }
       sheet.setRowHeight(row - 1, 17.25);
       sheet.setRowHeight(row, 14.25);
@@ -2010,9 +2069,9 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
 
       void writeCategoryRows(
         List<String> categories,
-        Map<String, Map<String, double>> periodicMap,
-        {bool negate = false}
-      ) {
+        Map<String, Map<String, double>> periodicMap, {
+        bool negate = false,
+      }) {
         for (final category in categories) {
           if (category.trim().isEmpty) {
             continue;
@@ -2023,14 +2082,27 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
               : category;
           setCell(0, row, excel_lib.TextCellValue('     $label'), labelStyle);
           for (final b in yearBlocks) {
-            final yVal = yearValue(periodicMap, b.year, category) * (negate ? -1 : 1);
+            final yVal =
+                yearValue(periodicMap, b.year, category) * (negate ? -1 : 1);
             if (yVal.abs() < 1e-12) {
-              setCell(b.totalCol, row, excel_lib.TextCellValue(''), emptyPeriodValueStyle);
+              setCell(
+                b.totalCol,
+                row,
+                excel_lib.TextCellValue(''),
+                emptyPeriodValueStyle,
+              );
             } else {
-              setCell(b.totalCol, row, excel_lib.DoubleCellValue(yVal), currencyStyle);
+              setCell(
+                b.totalCol,
+                row,
+                excel_lib.DoubleCellValue(yVal),
+                currencyStyle,
+              );
             }
             for (int m = 1; m <= 12; m++) {
-              final mVal = monthValue(periodicMap, b.year, m, category) * (negate ? -1 : 1);
+              final mVal =
+                  monthValue(periodicMap, b.year, m, category) *
+                  (negate ? -1 : 1);
               if (mVal.abs() < 1e-12) {
                 setCell(
                   b.monthCols[m - 1],
@@ -2066,24 +2138,35 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
             yTotal += yearValue(periodicMap, b.year, c);
           }
           yTotal = negate ? -yTotal : yTotal;
-          setCell(b.totalCol, row, excel_lib.DoubleCellValue(yTotal), currencyBoldStyle);
+          setCell(
+            b.totalCol,
+            row,
+            excel_lib.DoubleCellValue(yTotal),
+            currencyBoldStyle,
+          );
           for (int m = 1; m <= 12; m++) {
             double mTotal = 0;
             for (final c in categories) {
               mTotal += monthValue(periodicMap, b.year, m, c);
             }
             mTotal = negate ? -mTotal : mTotal;
-            setCell(b.monthCols[m - 1], row, excel_lib.DoubleCellValue(mTotal), currencyBoldStyle);
+            setCell(
+              b.monthCols[m - 1],
+              row,
+              excel_lib.DoubleCellValue(mTotal),
+              currencyBoldStyle,
+            );
           }
         }
         sheet.setRowHeight(row, 14.25);
         row++;
       }
 
-      List<String> filtered(Iterable<String> source, bool Function(String) test) {
-        return source
-            .where((c) => c.trim().isNotEmpty && test(c))
-            .toList();
+      List<String> filtered(
+        Iterable<String> source,
+        bool Function(String) test,
+      ) {
+        return source.where((c) => c.trim().isNotEmpty && test(c)).toList();
       }
 
       final revenueCategories = filtered(
@@ -2147,7 +2230,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
         periodicMap: exportData.periodicIncomeBreakdown,
       );
 
-        row++;
+      row++;
       writeSectionTitle('Cost of Goods Sold');
       writeCategoryRows(cogsCategories, exportData.periodicExpenseBreakdown);
       writeSumRow(
@@ -2156,12 +2239,30 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
         periodicMap: exportData.periodicExpenseBreakdown,
       );
 
-      final revenueYear = yearTotals(revenueCategories, exportData.periodicIncomeBreakdown);
-      final cogsYear = yearTotals(cogsCategories, exportData.periodicExpenseBreakdown);
-      final grossYear = List<double>.generate(yearBlocks.length, (i) => revenueYear[i] - cogsYear[i]);
-      final revenueMonth = monthTotals(revenueCategories, exportData.periodicIncomeBreakdown);
-      final cogsMonth = monthTotals(cogsCategories, exportData.periodicExpenseBreakdown);
-      final grossMonth = List<double>.generate(revenueMonth.length, (i) => revenueMonth[i] - cogsMonth[i]);
+      final revenueYear = yearTotals(
+        revenueCategories,
+        exportData.periodicIncomeBreakdown,
+      );
+      final cogsYear = yearTotals(
+        cogsCategories,
+        exportData.periodicExpenseBreakdown,
+      );
+      final grossYear = List<double>.generate(
+        yearBlocks.length,
+        (i) => revenueYear[i] - cogsYear[i],
+      );
+      final revenueMonth = monthTotals(
+        revenueCategories,
+        exportData.periodicIncomeBreakdown,
+      );
+      final cogsMonth = monthTotals(
+        cogsCategories,
+        exportData.periodicExpenseBreakdown,
+      );
+      final grossMonth = List<double>.generate(
+        revenueMonth.length,
+        (i) => revenueMonth[i] - cogsMonth[i],
+      );
 
       row++;
       writeSectionTitle('Gross Profit');
@@ -2169,9 +2270,19 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       int monthCursor = 0;
       for (int i = 0; i < yearBlocks.length; i++) {
         final b = yearBlocks[i];
-        setCell(b.totalCol, row, excel_lib.DoubleCellValue(grossYear[i]), currencyBoldStyle);
+        setCell(
+          b.totalCol,
+          row,
+          excel_lib.DoubleCellValue(grossYear[i]),
+          currencyBoldStyle,
+        );
         for (int m = 0; m < 12; m++) {
-          setCell(b.monthCols[m], row, excel_lib.DoubleCellValue(grossMonth[monthCursor]), currencyBoldStyle);
+          setCell(
+            b.monthCols[m],
+            row,
+            excel_lib.DoubleCellValue(grossMonth[monthCursor]),
+            currencyBoldStyle,
+          );
           monthCursor++;
         }
       }
@@ -2179,27 +2290,57 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       row++;
 
       writeSectionTitle('Operating Expenses');
-      writeCategoryRows(operatingCategories, exportData.periodicExpenseBreakdown);
+      writeCategoryRows(
+        operatingCategories,
+        exportData.periodicExpenseBreakdown,
+      );
       writeSumRow(
         'Total Operating Expenses',
         categories: operatingCategories,
         periodicMap: exportData.periodicExpenseBreakdown,
       );
 
-      final opexYear = yearTotals(operatingCategories, exportData.periodicExpenseBreakdown);
-      final opexMonth = monthTotals(operatingCategories, exportData.periodicExpenseBreakdown);
-      final operatingYear = List<double>.generate(yearBlocks.length, (i) => grossYear[i] - opexYear[i]);
-      final operatingMonth = List<double>.generate(grossMonth.length, (i) => grossMonth[i] - opexMonth[i]);
+      final opexYear = yearTotals(
+        operatingCategories,
+        exportData.periodicExpenseBreakdown,
+      );
+      final opexMonth = monthTotals(
+        operatingCategories,
+        exportData.periodicExpenseBreakdown,
+      );
+      final operatingYear = List<double>.generate(
+        yearBlocks.length,
+        (i) => grossYear[i] - opexYear[i],
+      );
+      final operatingMonth = List<double>.generate(
+        grossMonth.length,
+        (i) => grossMonth[i] - opexMonth[i],
+      );
 
       row++;
       writeSectionTitle('Operating Income');
-      setCell(0, row, excel_lib.TextCellValue('Operating Income'), totalLabelStyle);
+      setCell(
+        0,
+        row,
+        excel_lib.TextCellValue('Operating Income'),
+        totalLabelStyle,
+      );
       monthCursor = 0;
       for (int i = 0; i < yearBlocks.length; i++) {
         final b = yearBlocks[i];
-        setCell(b.totalCol, row, excel_lib.DoubleCellValue(operatingYear[i]), currencyBoldStyle);
+        setCell(
+          b.totalCol,
+          row,
+          excel_lib.DoubleCellValue(operatingYear[i]),
+          currencyBoldStyle,
+        );
         for (int m = 0; m < 12; m++) {
-          setCell(b.monthCols[m], row, excel_lib.DoubleCellValue(operatingMonth[monthCursor]), currencyBoldStyle);
+          setCell(
+            b.monthCols[m],
+            row,
+            excel_lib.DoubleCellValue(operatingMonth[monthCursor]),
+            currencyBoldStyle,
+          );
           monthCursor++;
         }
       }
@@ -2207,49 +2348,95 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       row++;
 
       writeSectionTitle('Other Income / Expenses');
-      writeCategoryRows(otherIncomeCategories, exportData.periodicIncomeBreakdown);
+      writeCategoryRows(
+        otherIncomeCategories,
+        exportData.periodicIncomeBreakdown,
+      );
       writeCategoryRows(
         otherExpenseCategories,
         exportData.periodicExpenseBreakdown,
         negate: true,
       );
-      final otherIncomeYear = yearTotals(otherIncomeCategories, exportData.periodicIncomeBreakdown);
+      final otherIncomeYear = yearTotals(
+        otherIncomeCategories,
+        exportData.periodicIncomeBreakdown,
+      );
       final otherExpenseYear = yearTotals(
         otherExpenseCategories,
         exportData.periodicExpenseBreakdown,
         negate: true,
       );
-      final otherIncomeMonth = monthTotals(otherIncomeCategories, exportData.periodicIncomeBreakdown);
+      final otherIncomeMonth = monthTotals(
+        otherIncomeCategories,
+        exportData.periodicIncomeBreakdown,
+      );
       final otherExpenseMonth = monthTotals(
         otherExpenseCategories,
         exportData.periodicExpenseBreakdown,
         negate: true,
       );
-      final otherNetYear = List<double>.generate(yearBlocks.length, (i) => otherIncomeYear[i] + otherExpenseYear[i]);
-      final otherNetMonth = List<double>.generate(otherIncomeMonth.length, (i) => otherIncomeMonth[i] + otherExpenseMonth[i]);
-      setCell(0, row, excel_lib.TextCellValue('Total Other Income / (Expenses)'), totalLabelStyle);
+      final otherNetYear = List<double>.generate(
+        yearBlocks.length,
+        (i) => otherIncomeYear[i] + otherExpenseYear[i],
+      );
+      final otherNetMonth = List<double>.generate(
+        otherIncomeMonth.length,
+        (i) => otherIncomeMonth[i] + otherExpenseMonth[i],
+      );
+      setCell(
+        0,
+        row,
+        excel_lib.TextCellValue('Total Other Income / (Expenses)'),
+        totalLabelStyle,
+      );
       monthCursor = 0;
       for (int i = 0; i < yearBlocks.length; i++) {
         final b = yearBlocks[i];
-        setCell(b.totalCol, row, excel_lib.DoubleCellValue(otherNetYear[i]), currencyBoldStyle);
+        setCell(
+          b.totalCol,
+          row,
+          excel_lib.DoubleCellValue(otherNetYear[i]),
+          currencyBoldStyle,
+        );
         for (int m = 0; m < 12; m++) {
-          setCell(b.monthCols[m], row, excel_lib.DoubleCellValue(otherNetMonth[monthCursor]), currencyBoldStyle);
+          setCell(
+            b.monthCols[m],
+            row,
+            excel_lib.DoubleCellValue(otherNetMonth[monthCursor]),
+            currencyBoldStyle,
+          );
           monthCursor++;
         }
       }
       sheet.setRowHeight(row, 21);
       row++;
 
-      final netYear = List<double>.generate(yearBlocks.length, (i) => operatingYear[i] + otherNetYear[i]);
-      final netMonth = List<double>.generate(operatingMonth.length, (i) => operatingMonth[i] + otherNetMonth[i]);
+      final netYear = List<double>.generate(
+        yearBlocks.length,
+        (i) => operatingYear[i] + otherNetYear[i],
+      );
+      final netMonth = List<double>.generate(
+        operatingMonth.length,
+        (i) => operatingMonth[i] + otherNetMonth[i],
+      );
       writeSectionTitle('Net Income');
       setCell(0, row, excel_lib.TextCellValue('Net Income'), totalLabelStyle);
       monthCursor = 0;
       for (int i = 0; i < yearBlocks.length; i++) {
         final b = yearBlocks[i];
-        setCell(b.totalCol, row, excel_lib.DoubleCellValue(netYear[i]), currencyBoldStyle);
+        setCell(
+          b.totalCol,
+          row,
+          excel_lib.DoubleCellValue(netYear[i]),
+          currencyBoldStyle,
+        );
         for (int m = 0; m < 12; m++) {
-          setCell(b.monthCols[m], row, excel_lib.DoubleCellValue(netMonth[monthCursor]), currencyBoldStyle);
+          setCell(
+            b.monthCols[m],
+            row,
+            excel_lib.DoubleCellValue(netMonth[monthCursor]),
+            currencyBoldStyle,
+          );
           monthCursor++;
         }
       }
@@ -2273,7 +2460,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       await downloadFile(
         '${orgName.replaceAll(' ', '_')}_Periodic_PL.xlsx',
         bytes,
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
     } catch (e, st) {
       dev.log('Excel Export Error: $e\n$st');
@@ -2369,7 +2557,9 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
       }
       var sheetView = sheetViews.getElement('sheetView');
       if (sheetView == null) {
-        sheetView = XmlElement(XmlName('sheetView'), [XmlAttribute(XmlName('workbookViewId'), '0')]);
+        sheetView = XmlElement(XmlName('sheetView'), [
+          XmlAttribute(XmlName('workbookViewId'), '0'),
+        ]);
         sheetViews.children.add(sheetView);
       }
       sheetView.setAttribute('showGridLines', '0');
@@ -2619,19 +2809,19 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
     final n = labels.length;
 
     List<double> aggInc(String cat) => pdfSvc.aggregatePeriodicCategoryForPl(
-          exportData.periodicIncomeBreakdown,
-          cat,
-          request.startDate,
-          request.endDate,
-          request.viewType,
-        );
+      exportData.periodicIncomeBreakdown,
+      cat,
+      request.startDate,
+      request.endDate,
+      request.viewType,
+    );
     List<double> aggExp(String cat) => pdfSvc.aggregatePeriodicCategoryForPl(
-          exportData.periodicExpenseBreakdown,
-          cat,
-          request.startDate,
-          request.endDate,
-          request.viewType,
-        );
+      exportData.periodicExpenseBreakdown,
+      cat,
+      request.startDate,
+      request.endDate,
+      request.viewType,
+    );
 
     List<double> addSeries(List<List<double>> series) {
       final out = List<double>.filled(n, 0);
@@ -2653,11 +2843,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
     }
 
     final revenueCategories = exportData.incomeBreakdown.keys
-        .where(
-          (c) =>
-              c.trim().isNotEmpty &&
-              !_isOtherIncomeCategory(c),
-        )
+        .where((c) => c.trim().isNotEmpty && !_isOtherIncomeCategory(c))
         .toList();
     final cogsCategories = exportData.expenseBreakdown.keys
         .where((c) => c.trim().isNotEmpty && _isCogsCategory(c))
@@ -2696,32 +2882,22 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
         .where((c) => c.trim().isNotEmpty && _isTaxExpenseExportLabel(c))
         .toList();
 
-    final revenueRows = revenueCategories
-        .map((category) {
-          final normalized = category.trim().toLowerCase();
-          final label = normalized == 'uncategorized'
-              ? 'Uncategorized Income'
-              : category;
-          return PnlPdfRowData(
-            label: label,
-            values: aggInc(category),
-          );
-        })
-        .toList();
+    final revenueRows = revenueCategories.map((category) {
+      final normalized = category.trim().toLowerCase();
+      final label = normalized == 'uncategorized'
+          ? 'Uncategorized Income'
+          : category;
+      return PnlPdfRowData(label: label, values: aggInc(category));
+    }).toList();
     final cogsRows = cogsCategories
         .map(
-          (category) => PnlPdfRowData(
-            label: category,
-            values: aggExp(category),
-          ),
+          (category) =>
+              PnlPdfRowData(label: category, values: aggExp(category)),
         )
         .toList();
     final opexRows = <PnlPdfRowData>[
       ...opexDetailCategories.map(
-        (category) => PnlPdfRowData(
-          label: category,
-          values: aggExp(category),
-        ),
+        (category) => PnlPdfRowData(label: category, values: aggExp(category)),
       ),
       PnlPdfRowData(
         label: 'Depreciation',
@@ -2735,10 +2911,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
 
     final otherRows = <PnlPdfRowData>[
       ...otherIncomeCategories.map(
-        (category) => PnlPdfRowData(
-          label: category,
-          values: aggInc(category),
-        ),
+        (category) => PnlPdfRowData(label: category, values: aggInc(category)),
       ),
       ...otherExpenseCategories.map(
         (category) => PnlPdfRowData(
@@ -2749,9 +2922,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
     ];
 
     final totalRevenue = addSeries(revenueRows.map((e) => e.values).toList());
-    final totalCogs = addSeries(
-      cogsRows.map((e) => e.values).toList(),
-    );
+    final totalCogs = addSeries(cogsRows.map((e) => e.values).toList());
     final grossProfit = subtractSeries(totalRevenue, totalCogs);
 
     final totalOpex = sumExpenseCategories(operatingCategories);
@@ -2764,7 +2935,9 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
 
     final depreciationTotal = sumExpenseCategories(depCategories);
     final amortizationTotal = sumExpenseCategories(amortCategories);
-    final interestExpenseTotal = sumExpenseCategories(interestExpenseCategories);
+    final interestExpenseTotal = sumExpenseCategories(
+      interestExpenseCategories,
+    );
     final taxExpenseTotal = sumExpenseCategories(taxCategories);
 
     final ebitda = List<double>.generate(n, (i) {
@@ -2828,9 +3001,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
         PnlPdfSectionData(title: 'Other Income / Expenses', rows: otherRows),
         PnlPdfSectionData(
           title: 'EBITDA (Reconciliation)',
-          rows: [
-            PnlPdfRowData(label: 'EBITDA', values: ebitda, isBold: true),
-          ],
+          rows: [PnlPdfRowData(label: 'EBITDA', values: ebitda, isBold: true)],
         ),
       ],
       netProfit: netIncome,
@@ -2856,9 +3027,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
 
   bool _isTaxExpenseExportLabel(String label) {
     final n = label.toLowerCase();
-    return n.contains('tax') ||
-        n.contains('irs') ||
-        n.contains('excise');
+    return n.contains('tax') || n.contains('irs') || n.contains('excise');
   }
 
   String _bucketLabelForMonth(DateTime month, PdfViewType viewType) {
@@ -2917,7 +3086,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
     return GetBuilder<FinancialReportController>(
       tag: getCurrentOrganization!.id.toString(),
       builder: (controller) {
-        if (controller.isLoading.value && !controller.hasPresentedFinancialData) {
+        if (controller.isLoading.value &&
+            !controller.hasPresentedFinancialData) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -3064,7 +3234,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
                                 (getCurrentOrganization?.street ?? '').trim(),
                                 [
                                   (getCurrentOrganization?.city ?? '').trim(),
-                                  (getCurrentOrganization?.primaryState ?? '').trim(),
+                                  (getCurrentOrganization?.primaryState ?? '')
+                                      .trim(),
                                   (getCurrentOrganization?.zip ?? '').trim(),
                                 ].where((e) => e.isNotEmpty).join(', '),
                               ].where((e) => e.isNotEmpty).join('\n'),
@@ -3104,7 +3275,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
                                 (getCurrentOrganization?.street ?? '').trim(),
                                 [
                                   (getCurrentOrganization?.city ?? '').trim(),
-                                  (getCurrentOrganization?.primaryState ?? '').trim(),
+                                  (getCurrentOrganization?.primaryState ?? '')
+                                      .trim(),
                                   (getCurrentOrganization?.zip ?? '').trim(),
                                 ].where((e) => e.isNotEmpty).join(', '),
                               ].where((e) => e.isNotEmpty).join('\n'),
@@ -3241,7 +3413,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
                               title: "Income",
                               value: numFormat.format(income),
                               change: incomeChange,
-                              comparisonUnavailable: incomeComparisonUnavailable,
+                              comparisonUnavailable:
+                                  incomeComparisonUnavailable,
                               isCurrency: true,
                               timeframe: _getTimeframeLabel(),
                             ),
@@ -3252,7 +3425,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
                               title: "Expenses",
                               value: numFormat.format(expenses),
                               change: expensesChange,
-                              comparisonUnavailable: expensesComparisonUnavailable,
+                              comparisonUnavailable:
+                                  expensesComparisonUnavailable,
                               isCurrency: true,
                               timeframe: _getTimeframeLabel(),
                             ),
@@ -3450,77 +3624,77 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
         children: [
           Center(
             child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AppText(
-                title,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white70 : Colors.black54,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: AppText(
-                  value,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  color: valueColor,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AppText(
+                  title,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? Colors.white70 : Colors.black54,
                   textAlign: TextAlign.center,
                 ),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: comparisonUnavailable
-                          ? Colors.grey.withValues(alpha: 0.15)
-                          : changeColor.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (!comparisonUnavailable && !isFlat) ...[
-                          Icon(changeIcon, size: 12, color: changeColor),
-                          const SizedBox(width: 4),
-                        ],
-                        AppText(
-                          comparisonUnavailable
-                              ? "New"
-                              : "${change.abs().toStringAsFixed(1)}%",
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          color: comparisonUnavailable
-                              ? (isDark ? Colors.white70 : Colors.black54)
-                              : changeColor,
-                          disableFormat: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                  AppText(
-                    "vs previous $timeframe",
-                    fontSize: 11,
-                    color: isDark ? Colors.white30 : Colors.black45,
+                const SizedBox(height: 12),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: AppText(
+                    value,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    color: valueColor,
                     textAlign: TextAlign.center,
-                    disableFormat: true,
                   ),
-                ],
-              ),
-            ],
-          ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: comparisonUnavailable
+                            ? Colors.grey.withValues(alpha: 0.15)
+                            : changeColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!comparisonUnavailable && !isFlat) ...[
+                            Icon(changeIcon, size: 12, color: changeColor),
+                            const SizedBox(width: 4),
+                          ],
+                          AppText(
+                            comparisonUnavailable
+                                ? "New"
+                                : "${change.abs().toStringAsFixed(1)}%",
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: comparisonUnavailable
+                                ? (isDark ? Colors.white70 : Colors.black54)
+                                : changeColor,
+                            disableFormat: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    AppText(
+                      "vs previous $timeframe",
+                      fontSize: 11,
+                      color: isDark ? Colors.white30 : Colors.black45,
+                      textAlign: TextAlign.center,
+                      disableFormat: true,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           if (tooltipText != null)
             Positioned(
@@ -3962,9 +4136,8 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
           touchTooltipData: BarTouchTooltipData(
             fitInsideHorizontally: true,
             fitInsideVertically: true,
-            getTooltipColor: (_) => isDark
-                ? const Color(0xFF1E293B)
-                : const Color(0xFF0F1E37),
+            getTooltipColor: (_) =>
+                isDark ? const Color(0xFF1E293B) : const Color(0xFF0F1E37),
             getTooltipItem: (group, groupIndex, rod, rodIndex) {
               final barCount = group.barRods.length;
               if (barCount > 1 && rodIndex > 0) {
@@ -3977,10 +4150,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
               final inc = (row['income'] as num?)?.toDouble() ?? 0;
               final exp = (row['expense'] as num?)?.toDouble() ?? 0;
               final net = (row['net'] as num?)?.toDouble() ?? 0;
-              const baseStyle = TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-              );
+              const baseStyle = TextStyle(color: Colors.white, fontSize: 12);
               final children = <TextSpan>[
                 TextSpan(
                   text: '$tooltipDateText\n',
@@ -3995,8 +4165,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
               if (_showRevenue) {
                 children.add(
                   TextSpan(
-                    text:
-                        'Revenue: ${_formatWholeCurrencyShorthand(inc)}\n',
+                    text: 'Revenue: ${_formatWholeCurrencyShorthand(inc)}\n',
                     style: const TextStyle(
                       color: Color(0xFF19C37D),
                       fontWeight: FontWeight.w800,
@@ -4009,8 +4178,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
               if (_showExpenses) {
                 children.add(
                   TextSpan(
-                    text:
-                        'Expenses: ${_formatWholeCurrencyShorthand(exp)}\n',
+                    text: 'Expenses: ${_formatWholeCurrencyShorthand(exp)}\n',
                     style: const TextStyle(
                       color: Color(0xFF2B7FFF),
                       fontWeight: FontWeight.w800,
@@ -4089,9 +4257,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
                 );
                 return Padding(
                   padding: EdgeInsets.only(
-                    top: rotateXLabels
-                        ? 2.0
-                        : (compactXAxis ? 6.0 : 12.0),
+                    top: rotateXLabels ? 2.0 : (compactXAxis ? 6.0 : 12.0),
                   ),
                   child: rotateXLabels
                       ? Transform.rotate(
@@ -4263,26 +4429,26 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
           gridData: const FlGridData(show: false),
           borderData: FlBorderData(show: false),
           titlesData: FlTitlesData(
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 50,
-              getTitlesWidget: (_, __) => const SizedBox.shrink(),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 50,
+                getTitlesWidget: (_, __) => const SizedBox.shrink(),
+              ),
             ),
-          ),
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: bottomReserved,
-              getTitlesWidget: (_, __) => const SizedBox.shrink(),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: bottomReserved,
+                getTitlesWidget: (_, __) => const SizedBox.shrink(),
+              ),
             ),
-          ),
-          rightTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
-          topTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
           ),
           lineBarsData: lineBars.isEmpty
               ? [
@@ -4542,13 +4708,17 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
                             show: true,
                             applyCutOffY: true,
                             cutOffY: 0,
-                            color: const Color(0xFF19C37D).withValues(alpha: 0.2),
+                            color: const Color(
+                              0xFF19C37D,
+                            ).withValues(alpha: 0.2),
                           ),
                           aboveBarData: BarAreaData(
                             show: true,
                             applyCutOffY: true,
                             cutOffY: 0,
-                            color: const Color(0xFFE57373).withValues(alpha: 0.2),
+                            color: const Color(
+                              0xFFE57373,
+                            ).withValues(alpha: 0.2),
                           ),
                           dotData: FlDotData(show: !hideDenseDots),
                         ),
@@ -4573,13 +4743,17 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
                             show: true,
                             applyCutOffY: true,
                             cutOffY: 0,
-                            color: const Color(0xFF2B7FFF).withValues(alpha: 0.2),
+                            color: const Color(
+                              0xFF2B7FFF,
+                            ).withValues(alpha: 0.2),
                           ),
                           aboveBarData: BarAreaData(
                             show: true,
                             applyCutOffY: true,
                             cutOffY: 0,
-                            color: const Color(0xFFE57373).withValues(alpha: 0.2),
+                            color: const Color(
+                              0xFFE57373,
+                            ).withValues(alpha: 0.2),
                           ),
                           dotData: FlDotData(show: !hideDenseDots),
                         ),
@@ -4617,11 +4791,9 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
     final hideDenseDots = cogsSeries.length > 18;
     final negativeAreaColor = const Color(0xFFE57373).withValues(alpha: 0.25);
     final negativeAreaSpots = cogsSeries.asMap().entries.map((e) {
-      final revenueGrowth =
-          (e.value['revenueGrowth'] as num?)?.toDouble() ?? 0;
+      final revenueGrowth = (e.value['revenueGrowth'] as num?)?.toDouble() ?? 0;
       final cogsGrowth = (e.value['cogsGrowth'] as num?)?.toDouble() ?? 0;
-      final minGrowth =
-          revenueGrowth < cogsGrowth ? revenueGrowth : cogsGrowth;
+      final minGrowth = revenueGrowth < cogsGrowth ? revenueGrowth : cogsGrowth;
       return FlSpot(e.key.toDouble(), minGrowth < 0 ? minGrowth : 0);
     }).toList();
     final allValues = cogsSeries
@@ -4858,13 +5030,17 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
                             show: true,
                             applyCutOffY: true,
                             cutOffY: 0,
-                            color: const Color(0xFF19C37D).withValues(alpha: 0.2),
+                            color: const Color(
+                              0xFF19C37D,
+                            ).withValues(alpha: 0.2),
                           ),
                           aboveBarData: BarAreaData(
                             show: true,
                             applyCutOffY: true,
                             cutOffY: 0,
-                            color: const Color(0xFFE57373).withValues(alpha: 0.2),
+                            color: const Color(
+                              0xFFE57373,
+                            ).withValues(alpha: 0.2),
                           ),
                           dotData: FlDotData(show: !hideDenseDots),
                         ),
@@ -4875,8 +5051,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
                               .map(
                                 (e) => FlSpot(
                                   e.key.toDouble(),
-                                  (e.value['cogsGrowth'] as num?)
-                                          ?.toDouble() ??
+                                  (e.value['cogsGrowth'] as num?)?.toDouble() ??
                                       0,
                                 ),
                               )
@@ -4895,7 +5070,9 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
                             show: true,
                             applyCutOffY: true,
                             cutOffY: 0,
-                            color: const Color(0xFFE57373).withValues(alpha: 0.2),
+                            color: const Color(
+                              0xFFE57373,
+                            ).withValues(alpha: 0.2),
                           ),
                           dotData: FlDotData(show: !hideDenseDots),
                         ),

@@ -1,16 +1,13 @@
 import 'dart:async';
 import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/helpers/currency_formatter.dart';
-import 'package:booksmart/models/transaction_model.dart';
 import 'package:booksmart/modules/admin/controllers/category_controler.dart';
-import 'package:booksmart/modules/user/controllers/grouped_transaction_controller.dart';
-import 'package:booksmart/modules/user/controllers/organization_controller.dart';
-import 'package:booksmart/supabase/tables.dart';
-import 'package:booksmart/utils/supabase.dart';
 import 'package:get/get.dart';
+import 'package:jiffy/jiffy.dart';
 import 'package:pie_chart/pie_chart.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'dart:developer' as dev;
+
+import '../../../controllers/deduction_controller.dart';
 
 class AIDeductionPage extends StatefulWidget {
   const AIDeductionPage({super.key});
@@ -20,208 +17,54 @@ class AIDeductionPage extends StatefulWidget {
 }
 
 class _AIDeductionPageState extends State<AIDeductionPage> {
-  late CategoryAdminController _catCtrl;
-  final TextEditingController _searchCtrl = TextEditingController();
-  Timer? _debounce;
-  String _search = '';
-
   DateTimeRange _activeRange = DateTimeRange(
-    start: DateTime.now().subtract(const Duration(days: 365)),
+    start: DateTime(DateTime.now().year),
     end: DateTime.now(),
   );
 
-  bool _isLoading = false;
-  List<dynamic> _rpcResults = [];
-  final Map<int, List<TransactionModel>> _txBySubCat = {};
-  int? _userStateId;
-
-  // UI state variables
   final Set<int> _expandedCategoryIds = {};
   String _selectedDeductionType = 'Federal';
-  double _totalAmount = 0.0;
-  int _totalTransactionsCount = 0;
-  int _matchedTransactionsCount = 0;
-  int _unmatchedTransactionsCount = 0;
 
-  final List<Color> curatedColors = const [
-    Color(0xFF2B7FFF), // Blue
-    Color(0xFF34C759), // Green
-    Color(0xFF9E00FF), // Purple
-    Color(0xFFFFCC00), // Yellow/Orange
-    Color(0xFFFF9500), // Orange
-    Color(0xFF00C7BE), // Teal
-    Color(0xFFFF2D55), // Pink
-    Color(0xFF5856D6), // Indigo
-    Color(0xFF64748B), // Slate
-    Color(0xFF8E8E93), // Grey
-  ];
+  bool get isFederal => _selectedDeductionType == 'Federal';
+
+  late String deductionControllerTag;
 
   @override
   void initState() {
     super.initState();
 
-    if (Get.isRegistered<CategoryAdminController>()) {
-      _catCtrl = Get.find<CategoryAdminController>();
-    } else {
-      _catCtrl = Get.put(CategoryAdminController());
-    }
+    deductionControllerTag = getDeductionControllerTag(
+      _activeRange.start,
+      _activeRange.end,
+    );
 
+    if (!Get.isRegistered<CategoryAdminController>()) {
+      Get.put(CategoryAdminController(), permanent: true);
+    }
     _loadData();
-    _searchCtrl.addListener(_onSearchChanged);
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    try {
-      if (_catCtrl.categories.isEmpty) {
-        await _catCtrl.fetchAll();
-      }
-
-      final org = getCurrentOrganization;
-      if (org == null) return;
-
-      _userStateId = org.stateId;
-
-      final tag = getGroupedTransactionControllerTag(
-        _activeRange.start,
-        _activeRange.end,
+    deductionControllerTag = getDeductionControllerTag(
+      _activeRange.start,
+      _activeRange.end,
+    );
+    if (!Get.isRegistered<DeductionController>(tag: deductionControllerTag)) {
+      Get.put(
+        DeductionController(
+          startDate: _activeRange.start,
+          endDate: _activeRange.end,
+        ),
+        tag: deductionControllerTag,
+        permanent: true,
       );
-      final GroupedTransactionController groupedCtrl =
-          Get.isRegistered<GroupedTransactionController>(tag: tag)
-          ? Get.find<GroupedTransactionController>(tag: tag)
-          : Get.put(
-              GroupedTransactionController(
-                startDate: _activeRange.start,
-                endDate: _activeRange.end,
-              ),
-              tag: tag,
-            );
-
-      _rpcResults = await groupedCtrl.loadSubcategoryTotalsWithDeductions(
-        _userStateId,
-      );
-      _txBySubCat.clear();
-
-      final txsRes = await supabase
-          .from(SupabaseTable.transaction)
-          .select()
-          .eq('org_id', org.id)
-          .gte('date_time', _activeRange.start.toIso8601String().split('T')[0])
-          .lte('date_time', _activeRange.end.toIso8601String().split('T')[0]);
-
-      final List<TransactionModel> allTxs = (txsRes as List)
-          .map((e) => TransactionModel.fromJson(e))
-          .toList();
-
-      for (final tx in allTxs) {
-        if (tx.subcategory != null) {
-          _txBySubCat.putIfAbsent(tx.subcategory!, () => []).add(tx);
-        }
-      }
-
-      double tempTotalAmount = 0.0;
-      for (final tx in allTxs) {
-        tempTotalAmount += tx.amount.abs();
-      }
-
-      _totalAmount = tempTotalAmount;
-      _totalTransactionsCount = allTxs.length;
-      _matchedTransactionsCount = allTxs.where((tx) => tx.isAiVerified).length;
-      _unmatchedTransactionsCount = allTxs
-          .where((tx) => !tx.isAiVerified)
-          .length;
-
-      if (_catCtrl.states.isEmpty) {
-        await _catCtrl.fetchStates();
-      }
-    } catch (e) {
-      dev.log("Error loading AI Deduction data: $e");
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
     }
-  }
-
-  Future<void> _fetchSubCategoryTransactions(int subCatId) async {
-    if (_txBySubCat.containsKey(subCatId)) return;
-
-    try {
-      final res = await supabase
-          .from(SupabaseTable.transaction)
-          .select()
-          .eq('org_id', getCurrentOrganization!.id)
-          .eq('sub_category_id', subCatId)
-          .gte('date_time', _activeRange.start.toIso8601String())
-          .lte('date_time', _activeRange.end.toIso8601String());
-
-      final List<TransactionModel> txs = (res as List)
-          .map((e) => TransactionModel.fromJson(e))
-          .toList();
-
-      setState(() {
-        _txBySubCat[subCatId] = txs;
-      });
-    } catch (e) {
-      dev.log("Error fetching transactions for subcategory $subCatId: $e");
-    }
-  }
-
-  Map<String, double> _computePieData() {
-    final Map<String, double> map = {};
-    for (var row in _rpcResults) {
-      final subId = row['sub_category_id'] as int;
-      final stateDed = (row['state_deduction'] ?? 0.0) as double;
-      final fedDed = (row['federal_deduction'] ?? 0.0) as double;
-      final totalDed = stateDed + fedDed;
-      final subName = _catCtrl.getSubCategoryName(subId);
-      if (totalDed > 0) {
-        if (_search.isEmpty ||
-            subName.toLowerCase().contains(_search.toLowerCase())) {
-          map[subName] = totalDed;
-        }
-      }
-    }
-    return map;
-  }
-
-  void _onSearchChanged() {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 250), () {
-      setState(() => _search = _searchCtrl.text);
-    });
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _searchCtrl.dispose();
-    super.dispose();
   }
 
   String _getDateRangeText() {
     final start = _activeRange.start;
     final end = _activeRange.end;
-    String pad(int n) => n.toString().padLeft(2, '0');
-    return '${_getMonthName(start.month)} ${pad(start.day)}, ${start.year} - ${_getMonthName(end.month)} ${pad(end.day)}, ${end.year}';
-  }
-
-  String _getMonthName(int month) {
-    const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-    return months[month - 1];
+    return "${Jiffy.parseFromDateTime(start).yMMMd} - ${Jiffy.parseFromDateTime(end).yMMMd}";
   }
 
   String _formatCurrency(double n) => CurrencyUtils.format(n);
@@ -238,8 +81,8 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF0C2346).withOpacity(0.4),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        color: const Color(0xFF0C2346).withValues(alpha: 0.4),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -249,9 +92,12 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: iconBgColor.withOpacity(0.12),
+              color: iconBgColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
-              border: Border.all(color: iconColor.withOpacity(0.3), width: 1),
+              border: Border.all(
+                color: iconColor.withValues(alpha: 0.3),
+                width: 1,
+              ),
             ),
             child: Icon(icon, color: iconColor, size: 20),
           ),
@@ -297,231 +143,6 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
     );
   }
 
-  Widget _buildSubTable(int subCatId, String categoryName, int txCount) {
-    List<dynamic> subTxs = _txBySubCat[subCatId] ?? [];
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-      color: const Color(0xFF071426),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Row(
-              children: const [
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Date',
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 4,
-                  child: Text(
-                    'Description',
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    'Merchant',
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Total Amount',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Deduction Amount',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Deduction Rate',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    '',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(color: Colors.white12, height: 1),
-          if (subTxs.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16.0),
-              child: Center(
-                child: Text(
-                  'No transactions found in this category',
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-              ),
-            )
-          else
-            ...subTxs.map((tx) {
-              String dateStr = '';
-              String descStr = '';
-              String merchantStr = '';
-              double totalAmt = 0.0;
-              double dedAmt = 0.0;
-              String rateStr = '';
-
-              final t = tx as TransactionModel;
-              dateStr =
-                  '${_getMonthName(t.dateTime.month)} ${t.dateTime.day}, ${t.dateTime.year}';
-              descStr = t.description.isNotEmpty ? t.description : t.title;
-              merchantStr = t.title;
-              totalAmt = t.amount.abs();
-              dedAmt = t.deductible ? t.amount.abs() : 0.0;
-              rateStr = t.deductible ? '100%' : '0%';
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        dateStr,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 4,
-                      child: Text(
-                        descStr,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        merchantStr,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        _formatCurrency(totalAmt),
-                        textAlign: TextAlign.end,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        _formatCurrency(dedAmt),
-                        textAlign: TextAlign.end,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        rateStr,
-                        textAlign: TextAlign.end,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 1,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                            onTap: () {},
-                            child: const Icon(
-                              Icons.visibility_outlined,
-                              color: Colors.white54,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          const SizedBox(height: 12),
-        ],
-      ),
-    );
-  }
-
   Widget _buildHeader(double width) {
     final isMobile = width < 720;
     final isVerySmall = width < 480;
@@ -545,7 +166,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
       ],
     );
 
-    final datePickerBtn = GestureDetector(
+    final datePickerBtn = InkWell(
       onTap: () async {
         final now = DateTime.now();
         final DateTimeRange? pickedRange = await showDateRangePicker(
@@ -576,16 +197,18 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
         if (pickedRange != null) {
           setState(() {
             _activeRange = pickedRange;
+
+            _loadData();
           });
-          _loadData();
         }
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        height: 40,
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFF0C2346).withOpacity(0.3),
+          color: const Color(0xFF0C2346),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -597,12 +220,14 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
               size: 16,
             ),
             const SizedBox(width: 8),
-            Text(
-              _getDateRangeText(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+            Flexible(
+              child: FittedText(
+                _getDateRangeText(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -617,37 +242,51 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
     );
 
     final deductionTypeDropdown = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      height: 40,
+      width: 100,
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         borderRadius: BorderRadius.circular(8),
-        color: const Color(0xFF0C2346).withOpacity(0.3),
+        color: const Color(0xFF0C2346),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedDeductionType,
-          dropdownColor: const Color(0xFF0C2346),
-          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70, size: 16),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-          onChanged: (String? newValue) {
-            if (newValue != null) {
-              setState(() {
-                _selectedDeductionType = newValue;
-              });
-            }
-          },
-          items: <String>['Federal', 'State']
-              .map<DropdownMenuItem<String>>((String value) {
-            return DropdownMenuItem<String>(
-              value: value,
-              child: Text(value),
-            );
-          }).toList(),
+      child: DropdownButton<String>(
+        value: _selectedDeductionType,
+        dropdownColor: const Color(0xFF0C2346),
+        underline: SizedBox(),
+        isDense: true,
+        elevation: 0,
+        borderRadius: BorderRadius.circular(8),
+
+        icon: const Icon(
+          Icons.keyboard_arrow_down,
+          color: Colors.white70,
+          size: 16,
         ),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        onChanged: (String? newValue) {
+          if (newValue != null) {
+            setState(() {
+              _selectedDeductionType = newValue;
+            });
+          }
+        },
+        items: <String>['Federal', 'State'].map<DropdownMenuItem<String>>((
+          String value,
+        ) {
+          return DropdownMenuItem<String>(
+            value: value,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Text(value),
+            ),
+          );
+        }).toList(),
       ),
     );
 
@@ -660,7 +299,11 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
           if (isVerySmall)
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [datePickerBtn, const SizedBox(height: 12), deductionTypeDropdown],
+              children: [
+                datePickerBtn,
+                const SizedBox(height: 12),
+                deductionTypeDropdown,
+              ],
             )
           else
             Row(
@@ -682,657 +325,685 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
         const SizedBox(width: 16),
         Row(
           mainAxisSize: MainAxisSize.min,
-          children: [datePickerBtn, const SizedBox(width: 12), deductionTypeDropdown],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatsGrid(
-    double width,
-    double totalAmt,
-    double totalDeds,
-    double deductionRate,
-    int totalTxs,
-    int matchedTxs,
-    int unmatchedTxs,
-    double matchedPercent,
-    double unmatchedPercent,
-  ) {
-    final cards = [
-      _buildStatCard(
-        icon: LucideIcons.wallet,
-        iconColor: const Color(0xFF2B7FFF),
-        iconBgColor: const Color(0xFF2B7FFF),
-        title: "Total Amount",
-        value: _formatCurrency(totalAmt),
-        subtext: "100% of transactions",
-      ),
-      _buildStatCard(
-        icon: LucideIcons.database,
-        iconColor: const Color(0xFF34C759),
-        iconBgColor: const Color(0xFF34C759),
-        title: "Total Deductions",
-        value: _formatCurrency(totalDeds),
-        subtext: "${deductionRate.toStringAsFixed(2)}% of total amount",
-        subtextColor: const Color(0xFF34C759),
-      ),
-      _buildStatCard(
-        icon: LucideIcons.percent,
-        iconColor: const Color(0xFF9E00FF),
-        iconBgColor: const Color(0xFF9E00FF),
-        title: "Deduction Rate",
-        value: "${deductionRate.toStringAsFixed(2)}%",
-        subtext: "Average deduction rate",
-      ),
-      _buildStatCard(
-        icon: LucideIcons.fileText,
-        iconColor: const Color(0xFFFFCC00),
-        iconBgColor: const Color(0xFFFFCC00),
-        title: "Total Transactions",
-        value: "$totalTxs",
-        subtext: "Across all categories",
-      ),
-      _buildStatCard(
-        icon: LucideIcons.checkCircle2,
-        iconColor: const Color(0xFF34C759),
-        iconBgColor: const Color(0xFF34C759),
-        title: "Matched Transactions",
-        value: "$matchedTxs",
-        subtext: "${matchedPercent.toStringAsFixed(1)}% of total",
-        subtextColor: const Color(0xFF34C759),
-      ),
-      _buildStatCard(
-        icon: LucideIcons.alertTriangle,
-        iconColor: const Color(0xFFFF3B30),
-        iconBgColor: const Color(0xFFFF3B30),
-        title: "Unmatched Transactions",
-        value: "$unmatchedTxs",
-        subtext: "${unmatchedPercent.toStringAsFixed(1)}% of total",
-        subtextColor: const Color(0xFFFF3B30),
-      ),
-    ];
-
-    int crossAxisCount = 3;
-    double childAspectRatio = 1.7;
-
-    if (width < 600) {
-      crossAxisCount = 1;
-      childAspectRatio = 3.5;
-    } else if (width < 1100) {
-      crossAxisCount = 2;
-      childAspectRatio = 2.0;
-    } else {
-      crossAxisCount = 2;
-      childAspectRatio = 2.2;
-    }
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: childAspectRatio,
-      ),
-      itemCount: cards.length,
-      itemBuilder: (context, index) => cards[index],
-    );
-  }
-
-  Widget _buildPieChartCard(
-    Map<String, double> pieMap,
-    List<Color> colorList,
-    List<MapEntry<String, double>> ordered,
-    double overall,
-    Color Function(String) getCategoryColor, {
-    bool isExpanded = false,
-  }) {
-    final mainContent = LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 420;
-        final chartWidget = Container(
-          height: 220,
-          width: 220,
-          alignment: Alignment.center,
-          child: PieChart(
-            dataMap: pieMap,
-            chartType: ChartType.ring,
-            colorList: colorList,
-            chartRadius: 150,
-            ringStrokeWidth: 32,
-            centerWidget: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Total Deductions',
-                  style: TextStyle(color: Colors.white54, fontSize: 10),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatCurrency(overall),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-            chartValuesOptions: const ChartValuesOptions(
-              showChartValues: false,
-              showChartValuesInPercentage: true,
-              showChartValuesOutside: true,
-              decimalPlaces: 1,
-              chartValueStyle: TextStyle(
-                color: Colors.black,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            legendOptions: const LegendOptions(showLegends: false),
-          ),
-        );
-
-        final legendWidget = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: ordered.map((entry) {
-            final color = getCategoryColor(entry.key);
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6.0),
-              child: Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      entry.key,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    _formatCurrency(entry.value),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        );
-
-        if (isWide) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              chartWidget,
-              const SizedBox(width: 24),
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  child: legendWidget,
-                ),
-              ),
-            ],
-          );
-        } else {
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                Center(child: chartWidget),
-                const SizedBox(height: 20),
-                legendWidget,
-              ],
-            ),
-          );
-        }
-      },
-    );
-
-    return Card(
-      color: const Color(0xFF0C2346).withOpacity(0.4),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: const [
-                Text(
-                  "Deductions by Category",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                SizedBox(width: 6),
-                Icon(Icons.info_outline, color: Colors.white54, size: 16),
-              ],
-            ),
-            const SizedBox(height: 20),
-            isExpanded ? Expanded(child: mainContent) : mainContent,
+            datePickerBtn,
+            const SizedBox(width: 12),
+            deductionTypeDropdown,
           ],
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildBreakdownHeader() {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'Deductions Breakdown',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 4),
-              Text(
-                'Click on a category to view matching transactions',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: const [
+        Text(
+          'Deductions Breakdown',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(width: 16),
-        Container(
-          width: 240,
-          height: 38,
-          decoration: BoxDecoration(
-            color: const Color(0xFF0C2346).withOpacity(0.3),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
-          ),
-          child: TextField(
-            controller: _searchCtrl,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
-            decoration: const InputDecoration(
-              hintText: 'Search categories...',
-              hintStyle: TextStyle(color: Colors.white30, fontSize: 13),
-              prefixIcon: Icon(Icons.search, color: Colors.white30, size: 16),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.only(bottom: 12),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Container(
-          height: 38,
-          width: 38,
-          decoration: BoxDecoration(
-            color: const Color(0xFF0C2346).withOpacity(0.3),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
-          ),
-          child: const Icon(Icons.filter_list, color: Colors.white70, size: 18),
+        Text(
+          'Click on a category to view matching transactions',
+          style: TextStyle(color: Colors.white54, fontSize: 12),
         ),
       ],
-    );
-  }
-
-  Widget _buildBreakdownTable(
-    List<dynamic> rows,
-    Color Function(String) getCategoryColor,
-  ) {
-    if (rows.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(40),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0C2346).withOpacity(0.2),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Center(
-          child: Text(
-            'No transactions available',
-            style: TextStyle(color: Colors.white54, fontSize: 14),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF0C2346).withOpacity(0.2),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              vertical: 16.0,
-              horizontal: 16.0,
-            ),
-            child: Row(
-              children: const [
-                Expanded(
-                  flex: 4,
-                  child: Text(
-                    'Category',
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    'Total Amount',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    'Total Deductions',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    'Deduction Rate',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    'Transactions',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    'Action',
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(color: Colors.white12, height: 1),
-          ...rows.map((row) {
-            int subId = row['sub_category_id'] as int;
-            String categoryName = _catCtrl.getSubCategoryName(subId);
-            double totalAmount = (row['total_amount'] ?? 0.0) as double;
-            double stateDed = (row['state_deduction'] ?? 0.0) as double;
-            double fedDed = (row['federal_deduction'] ?? 0.0) as double;
-            double totalDeductions = _selectedDeductionType == 'Federal' ? fedDed : stateDed;
-            double deductionRate = totalAmount > 0
-                ? (totalDeductions / totalAmount) * 100
-                : 0.0;
-            int txCount = _txBySubCat[subId]?.length ?? 0;
-
-            final isExpanded = _expandedCategoryIds.contains(subId);
-            final categoryColor = getCategoryColor(categoryName);
-
-            return Column(
-              children: [
-                InkWell(
-                  onTap: () {
-                    setState(() {
-                      if (isExpanded) {
-                        _expandedCategoryIds.remove(subId);
-                      } else {
-                        _expandedCategoryIds.add(subId);
-                        _fetchSubCategoryTransactions(subId);
-                      }
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 16,
-                      horizontal: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Colors.white.withOpacity(0.04),
-                          width: 1,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 4,
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: categoryColor,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  categoryName,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            _formatCurrency(totalAmount),
-                            textAlign: TextAlign.end,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            _formatCurrency(totalDeductions),
-                            textAlign: TextAlign.end,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            "${deductionRate.toStringAsFixed(2)}%",
-                            textAlign: TextAlign.end,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Text(
-                            "$txCount",
-                            textAlign: TextAlign.end,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 1,
-                          child: Icon(
-                            isExpanded
-                                ? Icons.keyboard_arrow_up
-                                : Icons.keyboard_arrow_down,
-                            color: Colors.white54,
-                            size: 18,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (isExpanded) _buildSubTable(subId, categoryName, txCount),
-              ],
-            );
-          }),
-        ],
-      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final double width = MediaQuery.sizeOf(context).width;
+    final bool isLargeScreen = width > 1100;
 
-    final pieData = _computePieData();
-    final overall = pieData.values.fold<double>(0.0, (a, b) => a + b);
+    return GetBuilder<DeductionController>(
+      tag: deductionControllerTag,
+      builder: (controller) {
+        Widget buildPieChartCard() {
+          final mainContent = LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth > 420;
+              final chartWidget = Container(
+                height: 280,
+                width: 220,
+                alignment: Alignment.center,
+                child: PieChart(
+                  dataMap: {
+                    for (var e in controller.results)
+                      e.subCategoryName: e.totalAmount,
+                  },
+                  chartType: ChartType.ring,
+                  colorList: controller.results.map((e) => e.color).toList(),
+                  chartRadius: 150,
+                  ringStrokeWidth: 32,
+                  centerWidget: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Total Deductions',
+                        style: TextStyle(color: Colors.white54, fontSize: 10),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatCurrency(
+                          isFederal
+                              ? controller.totalFederalDeduction
+                              : controller.totalStateDeduction,
+                        ),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                  chartValuesOptions: const ChartValuesOptions(
+                    showChartValues: false,
+                    showChartValuesInPercentage: true,
+                    showChartValuesOutside: true,
+                    decimalPlaces: 1,
+                    chartValueStyle: TextStyle(
+                      color: Colors.black,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  legendOptions: const LegendOptions(showLegends: false),
+                ),
+              );
 
-    final ordered = pieData.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+              final legendWidget = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: controller.results.map((entry) {
+                  final color = entry.color;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          entry.subCategoryName,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          _formatCurrency(
+                            isFederal
+                                ? entry.federalDeduction
+                                : entry.stateDeduction,
+                          ),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
 
-    final pieMap = Map<String, double>.fromEntries(
-      ordered.isEmpty ? [MapEntry('No data', 1.0)] : ordered,
-    );
-
-    final colorList = ordered.isEmpty
-        ? [colorScheme.primary]
-        : List.generate(ordered.length, (index) {
-            if (index < curatedColors.length) {
-              return curatedColors[index];
-            }
-            final hue = (index * 137.508) % 360;
-            return HSLColor.fromAHSL(1.0, hue, 0.65, 0.55).toColor();
-          });
-
-    final totalAmt = _totalAmount;
-    
-    double calculatedTotalDeductions = 0.0;
-    final List<MapEntry<String, double>> categoryDeductions = [];
-    for (var r in _rpcResults) {
-      final subId = r['sub_category_id'] as int;
-      final subName = _catCtrl.getSubCategoryName(subId);
-      final stateDed = (r['state_deduction'] ?? 0.0) as double;
-      final fedDed = (r['federal_deduction'] ?? 0.0) as double;
-      final totalDed = _selectedDeductionType == 'Federal' ? fedDed : stateDed;
-      
-      calculatedTotalDeductions += totalDed;
-      
-      if (totalDed > 0) {
-        categoryDeductions.add(MapEntry(subName, totalDed));
-      }
-    }
-    categoryDeductions.sort((a, b) => b.value.compareTo(a.value));
-
-    final totalDeds = calculatedTotalDeductions;
-    final deductionRate = totalAmt > 0 ? (totalDeds / totalAmt) * 100 : 0.0;
-    final totalTxs = _totalTransactionsCount;
-    final matchedTxs = _matchedTransactionsCount;
-    final unmatchedTxs = _unmatchedTransactionsCount;
-    final matchedPercent = totalTxs > 0 ? (matchedTxs / totalTxs) * 100 : 0.0;
-    final unmatchedPercent = totalTxs > 0
-        ? (unmatchedTxs / totalTxs) * 100
-        : 0.0;
-
-    Color getCategoryColor(String name) {
-      final idx = categoryDeductions.indexWhere((entry) => entry.key == name);
-      if (idx != -1 && idx < curatedColors.length) {
-        return curatedColors[idx];
-      }
-      return Colors.grey;
-    }
-
-    final List<dynamic> rows = _rpcResults.where((r) {
-      if (_search.isEmpty) return true;
-      final subId = r['sub_category_id'] as int;
-      return _catCtrl
-          .getSubCategoryName(subId)
-          .toLowerCase()
-          .contains(_search.toLowerCase());
-    }).toList();
-
-    return Scaffold(
-      backgroundColor: primaryColor,
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF2B7FFF)),
-            )
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final width = constraints.maxWidth;
-                final isLargeScreen = width > 1100;
-
+              if (isWide) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    chartWidget,
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: legendWidget,
+                      ),
+                    ),
+                  ],
+                );
+              } else {
                 return SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      Center(child: chartWidget),
+                      const SizedBox(height: 20),
+                      legendWidget,
+                    ],
+                  ),
+                );
+              }
+            },
+          );
+
+          return Card(
+            color: const Color(0xFF0C2346).withValues(alpha: 0.4),
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Text(
+                        "Deductions by Category",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      SizedBox(width: 6),
+                      Icon(Icons.info_outline, color: Colors.white54, size: 16),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  mainContent,
+                ],
+              ),
+            ),
+          );
+        }
+
+        Widget buildStatsGrid(double width) {
+          double totalDeductions = isFederal
+              ? controller.totalFederalDeduction
+              : controller.totalStateDeduction;
+          final cards = [
+            _buildStatCard(
+              icon: LucideIcons.wallet,
+              iconColor: const Color(0xFF2B7FFF),
+              iconBgColor: const Color(0xFF2B7FFF),
+              title: "Total Amount",
+              value: _formatCurrency(controller.totalAmount),
+              subtext: "100% of transactions",
+            ),
+            _buildStatCard(
+              icon: LucideIcons.database,
+              iconColor: const Color(0xFF34C759),
+              iconBgColor: const Color(0xFF34C759),
+              title: "Total Deductions",
+              value: _formatCurrency(
+                isFederal
+                    ? controller.totalFederalDeduction
+                    : controller.totalStateDeduction,
+              ),
+              subtext:
+                  "${((totalDeductions / controller.totalAmount) * 100).toStringAsFixed(0)}% of total amount",
+              subtextColor: const Color(0xFF34C759),
+            ),
+
+            _buildStatCard(
+              icon: LucideIcons.fileText,
+              iconColor: const Color(0xFFFFCC00),
+              iconBgColor: const Color(0xFFFFCC00),
+              title: "Total Transactions",
+              value: "${controller.totalTransactions}",
+              subtext: "Across all categories",
+            ),
+          ];
+
+          if (width > 600) {
+            return Column(spacing: 15, children: cards);
+          } else {
+            return Row(
+              spacing: 10,
+              children: cards.map((e) => Expanded(child: e)).toList(),
+            );
+          }
+        }
+
+        Widget buildSubTable(DeductionResult row) {
+          return GetBuilder<DeductionTransactionController>(
+            tag: getDeductionTransactionControllerTag(
+              row.subCategoryId,
+              _activeRange.start,
+              _activeRange.end,
+            ),
+            builder: (transactionController) {
+              if (transactionController.isLoading.value) {
+                return Container(
+                  height: 100,
+                  alignment: Alignment.center,
+                  child: CircularProgressIndicator.adaptive(),
+                );
+              } else if (transactionController.transactions.isEmpty) {
+                return Container(
+                  height: 100,
+                  alignment: Alignment.center,
+                  child: Text("No transactions found"),
+                );
+              }
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 24,
+                ),
+                color: const Color(0xFF071426),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        children: const [
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              'Date',
+                              style: TextStyle(
+                                color: Colors.white38,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 4,
+                            child: Text(
+                              'Description',
+                              style: TextStyle(
+                                color: Colors.white38,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              'Merchant',
+                              style: TextStyle(
+                                color: Colors.white38,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              'Amount',
+                              textAlign: TextAlign.end,
+                              style: TextStyle(
+                                color: Colors.white38,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(color: Colors.white12, height: 1),
+
+                    ...transactionController.transactions.map((tx) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                Jiffy.parseFromDateTime(tx.dateTime).yMMMd,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 4,
+                              child: Text(
+                                tx.description.isNotEmpty
+                                    ? tx.description
+                                    : tx.title,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Expanded(
+                              flex: 3,
+                              child: Text(
+                                tx.title,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                _formatCurrency(tx.amount),
+                                textAlign: TextAlign.end,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              );
+            },
+          );
+        }
+
+        Widget buildBreakdownTable() {
+          if (controller.results.isEmpty) {
+            return Container(
+              padding: const EdgeInsets.all(40),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0C2346).withValues(alpha: 0.2),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: Text(
+                  'No transactions available',
+                  style: TextStyle(color: Colors.white54, fontSize: 14),
+                ),
+              ),
+            );
+          }
+
+          return Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF0C2346).withValues(alpha: 0.2),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 16.0,
+                    horizontal: 16.0,
+                  ),
+                  child: Row(
+                    spacing: 3,
+                    children: const [
+                      Expanded(
+                        flex: 2,
+                        child: FittedText(
+                          'Category',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: FittedText(
+                          'Total',
+                          textAlign: TextAlign.end,
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: FittedText(
+                          'Deductions',
+                          textAlign: TextAlign.end,
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 3,
+                        child: FittedText(
+                          'Deduction Rate',
+                          textAlign: TextAlign.end,
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: FittedText(
+                          'Transactions',
+                          textAlign: TextAlign.end,
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: FittedText(
+                          'Action',
+                          textAlign: TextAlign.end,
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(color: Colors.white12, height: 1),
+                StatefulBuilder(
+                  builder: (context, rowState) {
+                    return Column(
+                      children: controller.results.map((row) {
+                        final isExpanded = _expandedCategoryIds.contains(
+                          row.subCategoryId,
+                        );
+
+                        return Column(
+                          children: [
+                            InkWell(
+                              onTap: () {
+                                rowState(() {
+                                  if (isExpanded) {
+                                    _expandedCategoryIds.remove(
+                                      row.subCategoryId,
+                                    );
+                                  } else {
+                                    _expandedCategoryIds.add(row.subCategoryId);
+
+                                    String deductionTransactionControllerTag =
+                                        getDeductionTransactionControllerTag(
+                                          row.subCategoryId,
+                                          _activeRange.start,
+                                          _activeRange.end,
+                                        );
+
+                                    if (!Get.isRegistered<
+                                      DeductionTransactionController
+                                    >(tag: deductionTransactionControllerTag)) {
+                                      Get.put(
+                                        DeductionTransactionController(
+                                          subCategoryId: row.subCategoryId,
+                                          startDate: _activeRange.start,
+                                          endDate: _activeRange.end,
+                                        ),
+                                        tag: deductionTransactionControllerTag,
+                                        permanent: true,
+                                      );
+                                    }
+                                  }
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                  horizontal: 16,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.04,
+                                      ),
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
+                                  spacing: 3,
+                                  children: [
+                                    Expanded(
+                                      flex: 2,
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(
+                                              color: row.color,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              row.subCategoryName,
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        _formatCurrency(row.totalAmount),
+                                        textAlign: TextAlign.end,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        _formatCurrency(
+                                          isFederal
+                                              ? row.federalDeduction
+                                              : row.stateDeduction,
+                                        ),
+                                        textAlign: TextAlign.end,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        row.deductionRate == null
+                                            ? "---"
+                                            : "${row.deductionRate}%",
+                                        textAlign: TextAlign.end,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        "${row.transactionCount}",
+                                        textAlign: TextAlign.end,
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 1,
+                                      child: Icon(
+                                        isExpanded
+                                            ? Icons.keyboard_arrow_up
+                                            : Icons.keyboard_arrow_down,
+                                        color: Colors.white54,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (isExpanded) buildSubTable(row),
+                          ],
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: primaryColor,
+          body: controller.isLoading.isTrue
+              ? const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF2B7FFF)),
+                )
+              : SingleChildScrollView(
                   padding: const EdgeInsets.all(24.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1343,67 +1014,29 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              flex: 6,
-                              child: _buildPieChartCard(
-                                pieMap,
-                                colorList,
-                                ordered,
-                                overall,
-                                getCategoryColor,
-                              ),
-                            ),
+                            Expanded(flex: 6, child: buildPieChartCard()),
                             const SizedBox(width: 20),
-                            Expanded(
-                              flex: 5,
-                              child: _buildStatsGrid(
-                                width,
-                                totalAmt,
-                                totalDeds,
-                                deductionRate,
-                                totalTxs,
-                                matchedTxs,
-                                unmatchedTxs,
-                                matchedPercent,
-                                unmatchedPercent,
-                              ),
-                            ),
+                            Expanded(flex: 5, child: buildStatsGrid(width)),
                           ],
                         )
                       else
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _buildPieChartCard(
-                              pieMap,
-                              colorList,
-                              ordered,
-                              overall,
-                              getCategoryColor,
-                            ),
+                            buildPieChartCard(),
                             const SizedBox(height: 20),
-                            _buildStatsGrid(
-                              width,
-                              totalAmt,
-                              totalDeds,
-                              deductionRate,
-                              totalTxs,
-                              matchedTxs,
-                              unmatchedTxs,
-                              matchedPercent,
-                              unmatchedPercent,
-                            ),
+                            buildStatsGrid(width),
                           ],
                         ),
                       const SizedBox(height: 32),
                       _buildBreakdownHeader(),
                       const SizedBox(height: 16),
-                      _buildBreakdownTable(rows, getCategoryColor),
+                      buildBreakdownTable(),
                     ],
                   ),
-                );
-              },
-            ),
+                ),
+        );
+      },
     );
   }
 }

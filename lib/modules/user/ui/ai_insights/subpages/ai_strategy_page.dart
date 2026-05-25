@@ -241,45 +241,20 @@ class _AiStrategyPageState extends State<AiStrategyPage> {
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Row(
-        children: [
-          /// 🔹 Left Accent Bar
-          Container(
-            width: 5,
-            height: 130,
-            decoration: BoxDecoration(
-              color: scheme.primary,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(14),
-                bottomLeft: Radius.circular(14),
-              ),
-            ),
-          ),
-
-          /// 🔹 Content
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Row(
+          spacing: 5,
+          children: [
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   /// Title + Amount
-                  Row(
-                    children: [
-                      Expanded(
-                        child: AppText(
-                          strategy.title,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      AppText(
-                        amount,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: scheme.primary,
-                      ),
-                    ],
+                  AppText(
+                    strategy.title,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
                   ),
 
                   const SizedBox(height: 6),
@@ -301,32 +276,34 @@ class _AiStrategyPageState extends State<AiStrategyPage> {
                       _chip(strategy.riskLevel ?? "---", riskColor),
                     ],
                   ),
-
-                  const SizedBox(height: 12),
-
-                  /// CTA
-                  /// CTA
-                  Row(
-                    children: [
-                      const Spacer(),
-                      SizedBox(
-                        height: 32,
-                        child: AppButton(
-                          buttonText: "Ask BookSmart AI",
-                          onTapFunction: () {
-                            goToAiChatScreen(strategy: strategy);
-                          },
-                          fontSize: 11,
-                          radius: 8,
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
-          ),
-        ],
+            Column(
+              spacing: 10,
+              children: [
+                AppText(
+                  amount,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: scheme.primary,
+                ),
+                SizedBox(
+                  width: 95,
+                  // height: 32,
+                  child: AppButton(
+                    buttonText: "Ask BookSmart AI",
+                    onTapFunction: () {
+                      goToAiChatScreen(strategy: strategy);
+                    },
+                    fontSize: 10,
+                    radius: 8,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

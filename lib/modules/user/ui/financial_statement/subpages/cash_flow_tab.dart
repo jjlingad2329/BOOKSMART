@@ -87,7 +87,9 @@ class _CashFlowTabState extends State<CashFlowTab>
     if (_startDate == null || _endDate == null) return;
     final orgId = getCurrentOrganization?.id;
     if (orgId == null) return;
-    final controller = Get.find<FinancialReportController>(tag: orgId.toString());
+    final controller = Get.find<FinancialReportController>(
+      tag: orgId.toString(),
+    );
     if (_isSameDate(controller.lastStartDate, _startDate) &&
         _isSameDate(controller.lastEndDate, _endDate)) {
       return;
@@ -101,13 +103,18 @@ class _CashFlowTabState extends State<CashFlowTab>
   void _exportCSV(FinancialReportController controller) async {
     final buffer = StringBuffer();
     final String orgName = getCurrentOrganization?.name ?? 'Organization';
-    final String periodLabel = "${DateFormat('MM-dd-yyyy').format(_startDate ?? DateTime.now())}_to_${DateFormat('MM-dd-yyyy').format(_endDate ?? DateTime.now())}";
-    
+    final String periodLabel =
+        "${DateFormat('MM-dd-yyyy').format(_startDate ?? DateTime.now())}_to_${DateFormat('MM-dd-yyyy').format(_endDate ?? DateTime.now())}";
+
     buffer.writeln('Cash Flow Statement - $orgName');
     buffer.writeln('Period: $periodLabel');
     buffer.writeln('');
 
-    void addActivitySection(String title, List<Map<String, dynamic>> items, double total) {
+    void addActivitySection(
+      String title,
+      List<Map<String, dynamic>> items,
+      double total,
+    ) {
       buffer.writeln(title.toUpperCase());
       buffer.writeln('Activity Item,Amount');
       for (var item in items) {
@@ -117,15 +124,34 @@ class _CashFlowTabState extends State<CashFlowTab>
       buffer.writeln('');
     }
 
-    addActivitySection('Operating Activities', _getOperatingItems(controller), controller.operatingCashFlow.value);
-    addActivitySection('Investing Activities', _getInvestingItems(controller), controller.investingCashFlow.value);
-    addActivitySection('Financing Activities', _getFinancingItems(controller), controller.financingCashFlow.value);
+    addActivitySection(
+      'Operating Activities',
+      _getOperatingItems(controller),
+      controller.operatingCashFlow.value,
+    );
+    addActivitySection(
+      'Investing Activities',
+      _getInvestingItems(controller),
+      controller.investingCashFlow.value,
+    );
+    addActivitySection(
+      'Financing Activities',
+      _getFinancingItems(controller),
+      controller.financingCashFlow.value,
+    );
 
-    final netCash = controller.operatingCashFlow.value + controller.investingCashFlow.value + controller.financingCashFlow.value;
+    final netCash =
+        controller.operatingCashFlow.value +
+        controller.investingCashFlow.value +
+        controller.financingCashFlow.value;
     buffer.writeln('NET CHANGE IN CASH,$netCash');
 
     final csvBytes = utf8.encode(buffer.toString());
-    await downloadFile('${orgName}_Cash_Flow_$periodLabel.csv', csvBytes, mimeType: 'text/csv');
+    await downloadFile(
+      '${orgName}_Cash_Flow_$periodLabel.csv',
+      csvBytes,
+      mimeType: 'text/csv',
+    );
   }
 
   void _exportPDF(FinancialReportController controller) async {
@@ -135,9 +161,14 @@ class _CashFlowTabState extends State<CashFlowTab>
         return;
       }
 
-      final start = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+      final start = DateTime(
+        _startDate!.year,
+        _startDate!.month,
+        _startDate!.day,
+      );
       final end = DateTime(_endDate!.year, _endDate!.month, _endDate!.day);
-      final totalMonths = (end.year - start.year) * 12 + end.month - start.month + 1;
+      final totalMonths =
+          (end.year - start.year) * 12 + end.month - start.month + 1;
 
       // Keep existing filter behavior, but enforce 5-column export constraints.
       final PdfViewType viewType = _selectedFilterIdx == 4
@@ -154,7 +185,6 @@ class _CashFlowTabState extends State<CashFlowTab>
       );
 
       await PdfExportService().exportCashFlowPresentationPdf(request);
-
     } catch (e, st) {
       dev.log('PDF Export Error: $e\n$st');
       showSnackBar('Please review PDF generation: $e', isError: true);
@@ -225,61 +255,77 @@ class _CashFlowTabState extends State<CashFlowTab>
       }
     }
 
-    DateTime cursor = DateTime(request.startDate.year, request.startDate.month, 1);
-    final DateTime last = DateTime(request.endDate.year, request.endDate.month, 1);
+    DateTime cursor = DateTime(
+      request.startDate.year,
+      request.startDate.month,
+      1,
+    );
+    final DateTime last = DateTime(
+      request.endDate.year,
+      request.endDate.month,
+      1,
+    );
     while (!cursor.isAfter(last)) {
       final monthKey = DateFormat('yyyy-MM').format(cursor);
 
       final netIncome = controller.periodicNetIncome[monthKey] ?? 0.0;
-      final expenseMap = controller.periodicExpenseBreakdown[monthKey] ?? <String, double>{};
+      final expenseMap =
+          controller.periodicExpenseBreakdown[monthKey] ?? <String, double>{};
       final operatingMap =
-          controller.periodicOperatingActivities[monthKey] ?? <String, double>{};
+          controller.periodicOperatingActivities[monthKey] ??
+          <String, double>{};
       final investingMap =
-          controller.periodicInvestingActivities[monthKey] ?? <String, double>{};
+          controller.periodicInvestingActivities[monthKey] ??
+          <String, double>{};
       final financingMap =
-          controller.periodicFinancingActivities[monthKey] ?? <String, double>{};
+          controller.periodicFinancingActivities[monthKey] ??
+          <String, double>{};
 
-      final depAmort = monthlyDepFromTransactions[monthKey] ??
-          _sumByKeywords(
-            expenseMap,
-            const ['depreciation', 'amortization'],
-          );
-      final wcChanges = _sumByKeywords(
-        operatingMap,
-        const [
-          'receivable',
-          'inventory',
-          'payable',
-          'accrued',
-          'deferred',
-          'prepaid',
-          '[cf:workingcapital]',
-        ],
-      );
+      final depAmort =
+          monthlyDepFromTransactions[monthKey] ??
+          _sumByKeywords(expenseMap, const ['depreciation', 'amortization']);
+      final wcChanges = _sumByKeywords(operatingMap, const [
+        'receivable',
+        'inventory',
+        'payable',
+        'accrued',
+        'deferred',
+        'prepaid',
+        '[cf:workingcapital]',
+      ]);
       final operatingOther = _sumValues(operatingMap) - wcChanges;
       final operatingTotal = netIncome + depAmort + wcChanges + operatingOther;
 
-      final capex = _sumByKeywords(
-        investingMap,
-        const ['equipment', 'property', 'asset purchase', '[cf:investing]'],
-      );
+      final capex = _sumByKeywords(investingMap, const [
+        'equipment',
+        'property',
+        'asset purchase',
+        '[cf:investing]',
+      ]);
       final investingOther = _sumValues(investingMap) - capex;
       final investingTotal = capex + investingOther;
 
-      final loanActivities = _sumByKeywords(
-        financingMap,
-        const ['loan', 'debt', '[cf:financing]'],
-      );
-      final ownerContributions = _sumByKeywords(
-        financingMap,
-        const ['contribution', 'share capital', '[cf:contribution]'],
-      );
-      final distributions = _sumByKeywords(
-        financingMap,
-        const ['distribution', 'dividend', 'owner draw', '[cf:distributions]'],
-      );
+      final loanActivities = _sumByKeywords(financingMap, const [
+        'loan',
+        'debt',
+        '[cf:financing]',
+      ]);
+      final ownerContributions = _sumByKeywords(financingMap, const [
+        'contribution',
+        'share capital',
+        '[cf:contribution]',
+      ]);
+      final distributions = _sumByKeywords(financingMap, const [
+        'distribution',
+        'dividend',
+        'owner draw',
+        '[cf:distributions]',
+      ]);
       final financingOther =
-          _sumValues(financingMap) - loanActivities - ownerContributions - distributions;
+          _sumValues(financingMap) -
+          loanActivities -
+          ownerContributions -
+          distributions;
       final financingTotal =
           loanActivities + ownerContributions + distributions + financingOther;
 
@@ -375,13 +421,23 @@ class _CashFlowTabState extends State<CashFlowTab>
     final wcSeries = _valuesFromBuckets(wcByBucket, bucketLabels);
     final opOtherSeries = _valuesFromBuckets(opOtherByBucket, bucketLabels);
     final capexSeries = _valuesFromBuckets(capexByBucket, bucketLabels);
-    final investingOtherSeries =
-        _valuesFromBuckets(investingOtherByBucket, bucketLabels);
+    final investingOtherSeries = _valuesFromBuckets(
+      investingOtherByBucket,
+      bucketLabels,
+    );
     final loanSeries = _valuesFromBuckets(loanByBucket, bucketLabels);
-    final contributionSeries = _valuesFromBuckets(contribByBucket, bucketLabels);
-    final distributionsSeries =
-        _valuesFromBuckets(distributionsByBucket, bucketLabels);
-    final financingOtherSeries = _valuesFromBuckets(finOtherByBucket, bucketLabels);
+    final contributionSeries = _valuesFromBuckets(
+      contribByBucket,
+      bucketLabels,
+    );
+    final distributionsSeries = _valuesFromBuckets(
+      distributionsByBucket,
+      bucketLabels,
+    );
+    final financingOtherSeries = _valuesFromBuckets(
+      finOtherByBucket,
+      bucketLabels,
+    );
 
     List<double> recomputeTotalSeries(List<List<double>> parts) {
       return List<double>.generate(
@@ -404,15 +460,22 @@ class _CashFlowTabState extends State<CashFlowTab>
       adjustableComponent[lastIdx] += delta;
     }
 
-    var opTotalSeries = recomputeTotalSeries(
-      [netIncomeSeries, depSeries, wcSeries, opOtherSeries],
-    );
-    var investingTotalSeries = recomputeTotalSeries(
-      [capexSeries, investingOtherSeries],
-    );
-    var financingTotalSeries = recomputeTotalSeries(
-      [loanSeries, contributionSeries, distributionsSeries, financingOtherSeries],
-    );
+    var opTotalSeries = recomputeTotalSeries([
+      netIncomeSeries,
+      depSeries,
+      wcSeries,
+      opOtherSeries,
+    ]);
+    var investingTotalSeries = recomputeTotalSeries([
+      capexSeries,
+      investingOtherSeries,
+    ]);
+    var financingTotalSeries = recomputeTotalSeries([
+      loanSeries,
+      contributionSeries,
+      distributionsSeries,
+      financingOtherSeries,
+    ]);
 
     // Keep exported totals exactly in sync with dashboard cards.
     alignSectionToDashboardTotal(
@@ -433,7 +496,8 @@ class _CashFlowTabState extends State<CashFlowTab>
 
     var netChangeSeries = List<double>.generate(
       bucketLabels.length,
-      (i) => opTotalSeries[i] + investingTotalSeries[i] + financingTotalSeries[i],
+      (i) =>
+          opTotalSeries[i] + investingTotalSeries[i] + financingTotalSeries[i],
     );
     alignSectionToDashboardTotal(
       netChangeSeries,
@@ -455,10 +519,7 @@ class _CashFlowTabState extends State<CashFlowTab>
         CashFlowPdfSectionData(
           title: 'Operating Activities',
           rows: [
-            CashFlowPdfRowData(
-              label: 'Net income',
-              values: netIncomeSeries,
-            ),
+            CashFlowPdfRowData(label: 'Net income', values: netIncomeSeries),
             CashFlowPdfRowData(
               label: 'Depreciation & amortization',
               values: depSeries,
@@ -501,10 +562,7 @@ class _CashFlowTabState extends State<CashFlowTab>
         CashFlowPdfSectionData(
           title: 'Financing Activities',
           rows: [
-            CashFlowPdfRowData(
-              label: 'Loan activities',
-              values: loanSeries,
-            ),
+            CashFlowPdfRowData(label: 'Loan activities', values: loanSeries),
             CashFlowPdfRowData(
               label: 'Owner contributions',
               values: contributionSeries,
@@ -624,9 +682,11 @@ class _CashFlowTabState extends State<CashFlowTab>
         final dd = x.day.toString().padLeft(2, '0');
         return '${x.year}-$mm-$dd';
       }
+
       String cleanTitle(String raw) {
         return raw.replaceAll(RegExp(r'\[[^\]]+\]'), '').trim();
       }
+
       List<String> extractTags(String title) {
         return RegExp(r'\[([^\]]+)\]')
             .allMatches(title)
@@ -634,6 +694,7 @@ class _CashFlowTabState extends State<CashFlowTab>
             .where((x) => x.isNotEmpty)
             .toList();
       }
+
       String classifyFlowSection(String titleLower) {
         if (titleLower.contains('[cf:manual:operating]') ||
             titleLower.contains('[cf:manual:other]')) {
@@ -667,11 +728,17 @@ class _CashFlowTabState extends State<CashFlowTab>
       }
 
       final totalMonths =
-          (reportEnd.year - reportStart.year) * 12 + reportEnd.month - reportStart.month + 1;
-      final PdfViewType viewType = request?.viewType ??
+          (reportEnd.year - reportStart.year) * 12 +
+          reportEnd.month -
+          reportStart.month +
+          1;
+      final PdfViewType viewType =
+          request?.viewType ??
           (_selectedFilterIdx == 4
               ? PdfViewType.yearly
-              : (totalMonths <= 5 ? PdfViewType.monthly : PdfViewType.quarterly));
+              : (totalMonths <= 5
+                    ? PdfViewType.monthly
+                    : PdfViewType.quarterly));
       final pdfRequest = PdfExportRequest(
         startDate: reportStart,
         endDate: reportEnd,
@@ -681,8 +748,11 @@ class _CashFlowTabState extends State<CashFlowTab>
         companyAddress: '',
       );
       final liveData = await _buildCashFlowPdfData(controller, pdfRequest);
-      final bucketLabels =
-          PdfExportService().buildBucketLabels(reportStart, reportEnd, viewType);
+      final bucketLabels = PdfExportService().buildBucketLabels(
+        reportStart,
+        reportEnd,
+        viewType,
+      );
       final keys = List<String>.generate(bucketLabels.length, (i) => 'b$i');
       final Map<String, String> keyToLabel = {
         for (int i = 0; i < keys.length; i++) keys[i]: bucketLabels[i],
@@ -699,9 +769,7 @@ class _CashFlowTabState extends State<CashFlowTab>
       }
 
       Map<String, double> mapFromSeries(List<double> values) {
-        return {
-          for (int i = 0; i < keys.length; i++) keys[i]: values[i],
-        };
+        return {for (int i = 0; i < keys.length; i++) keys[i]: values[i]};
       }
 
       final netIncomeMap = mapFromSeries(
@@ -717,13 +785,22 @@ class _CashFlowTabState extends State<CashFlowTab>
         seriesFor('Operating Activities', 'Other operating adjustments'),
       );
       final operatingMap = mapFromSeries(
-        seriesFor('Operating Activities', 'Net Cash from Operating Activities (A)'),
+        seriesFor(
+          'Operating Activities',
+          'Net Cash from Operating Activities (A)',
+        ),
       );
       final investingMap = mapFromSeries(
-        seriesFor('Investing Activities', 'Net Cash from Investing Activities (B)'),
+        seriesFor(
+          'Investing Activities',
+          'Net Cash from Investing Activities (B)',
+        ),
       );
       final financingMap = mapFromSeries(
-        seriesFor('Financing Activities', 'Net Cash from Financing Activities (C)'),
+        seriesFor(
+          'Financing Activities',
+          'Net Cash from Financing Activities (C)',
+        ),
       );
       final netChangeMap = mapFromSeries(liveData.netChange);
       final beginningCashMap = mapFromSeries(liveData.beginningCash);
@@ -791,9 +868,7 @@ class _CashFlowTabState extends State<CashFlowTab>
 
       final bucketMonthKeys = buildBucketMonthKeys();
 
-      Map<String, double> zeroMap() => {
-        for (final k in keys) k: 0.0,
-      };
+      Map<String, double> zeroMap() => {for (final k in keys) k: 0.0};
 
       Map<String, double> addMaps(List<Map<String, double>> maps) {
         final out = zeroMap();
@@ -899,7 +974,10 @@ class _CashFlowTabState extends State<CashFlowTab>
         ppePurchasesMap,
         intangiblePurchasesMap,
       ]);
-      final investingOtherTemplateMap = subtractMap(investingMap, investingKnown);
+      final investingOtherTemplateMap = subtractMap(
+        investingMap,
+        investingKnown,
+      );
 
       final issueShareCapitalMap = bucketizeByKeywords(
         controller.periodicFinancingActivities,
@@ -907,16 +985,25 @@ class _CashFlowTabState extends State<CashFlowTab>
       );
       final stockIssuanceMap = bucketizeByKeywords(
         controller.periodicFinancingActivities,
-        const ['stock issuance', 'stock issued', 'equity issuance', 'contribution'],
+        const [
+          'stock issuance',
+          'stock issued',
+          'equity issuance',
+          'contribution',
+        ],
       );
       final interestPaidMap = bucketizeByKeywords(
         controller.periodicFinancingActivities,
         const ['interest paid', 'interest'],
       );
-      final capitalRepaymentsMap = bucketizeByKeywords(
-        controller.periodicFinancingActivities,
-        const ['capital repayment', 'buy-back', 'share buy', 'debt repayment', 'principal repayment'],
-      );
+      final capitalRepaymentsMap =
+          bucketizeByKeywords(controller.periodicFinancingActivities, const [
+            'capital repayment',
+            'buy-back',
+            'share buy',
+            'debt repayment',
+            'principal repayment',
+          ]);
       final loanPaidMap = bucketizeByKeywords(
         controller.periodicFinancingActivities,
         const ['loan paid', 'loan repayment', 'principal'],
@@ -933,7 +1020,10 @@ class _CashFlowTabState extends State<CashFlowTab>
         loanPaidMap,
         dividendsFinancingMap,
       ]);
-      final financingOtherTemplateMap = subtractMap(financingMap, financingKnown);
+      final financingOtherTemplateMap = subtractMap(
+        financingMap,
+        financingKnown,
+      );
 
       final excel = excel_lib.Excel.createExcel();
       final sheet = excel['Cash Flow Statement'];
@@ -990,6 +1080,7 @@ class _CashFlowTabState extends State<CashFlowTab>
         horizontalAlign: excel_lib.HorizontalAlign.Right,
         verticalAlign: excel_lib.VerticalAlign.Center,
       );
+
       /// Section banner label (Operating / Investing / Financing) — left-aligned in column A.
       final headerBlueLabelStyle = excel_lib.CellStyle(
         bold: true,
@@ -1098,7 +1189,9 @@ class _CashFlowTabState extends State<CashFlowTab>
       sheet.setRowHeight(3, 14);
       sheet.setRowHeight(6, 18);
 
-      final titleStartCol = keys.length >= 3 ? symbolCol(keys.length - 3) : firstSymbolCol;
+      final titleStartCol = keys.length >= 3
+          ? symbolCol(keys.length - 3)
+          : firstSymbolCol;
       final titleEndCol = lastAmountCol;
       final streetLine = (org.street ?? '').trim();
       final cityStateZipLine = [
@@ -1108,16 +1201,40 @@ class _CashFlowTabState extends State<CashFlowTab>
       ].where((e) => e.isNotEmpty).join(', ');
 
       setCell(labelCol, 1, excel_lib.TextCellValue(orgName), companyStyle);
-      setCell(labelCol, 2, excel_lib.TextCellValue(streetLine), companyMetaStyle);
-      setCell(labelCol, 3, excel_lib.TextCellValue(cityStateZipLine), companyMetaStyle);
+      setCell(
+        labelCol,
+        2,
+        excel_lib.TextCellValue(streetLine),
+        companyMetaStyle,
+      );
+      setCell(
+        labelCol,
+        3,
+        excel_lib.TextCellValue(cityStateZipLine),
+        companyMetaStyle,
+      );
 
-      setCell(titleStartCol, 1, excel_lib.TextCellValue('Cash Flow Statement'), titleStyle);
+      setCell(
+        titleStartCol,
+        1,
+        excel_lib.TextCellValue('Cash Flow Statement'),
+        titleStyle,
+      );
       sheet.merge(
-        excel_lib.CellIndex.indexByColumnRow(columnIndex: titleStartCol, rowIndex: 1),
-        excel_lib.CellIndex.indexByColumnRow(columnIndex: titleEndCol, rowIndex: 1),
+        excel_lib.CellIndex.indexByColumnRow(
+          columnIndex: titleStartCol,
+          rowIndex: 1,
+        ),
+        excel_lib.CellIndex.indexByColumnRow(
+          columnIndex: titleEndCol,
+          rowIndex: 1,
+        ),
       );
       sheet.setMergedCellStyle(
-        excel_lib.CellIndex.indexByColumnRow(columnIndex: titleStartCol, rowIndex: 1),
+        excel_lib.CellIndex.indexByColumnRow(
+          columnIndex: titleStartCol,
+          rowIndex: 1,
+        ),
         titleStyle,
       );
 
@@ -1130,11 +1247,20 @@ class _CashFlowTabState extends State<CashFlowTab>
         metaStyle,
       );
       sheet.merge(
-        excel_lib.CellIndex.indexByColumnRow(columnIndex: titleStartCol, rowIndex: 2),
-        excel_lib.CellIndex.indexByColumnRow(columnIndex: titleEndCol, rowIndex: 2),
+        excel_lib.CellIndex.indexByColumnRow(
+          columnIndex: titleStartCol,
+          rowIndex: 2,
+        ),
+        excel_lib.CellIndex.indexByColumnRow(
+          columnIndex: titleEndCol,
+          rowIndex: 2,
+        ),
       );
       sheet.setMergedCellStyle(
-        excel_lib.CellIndex.indexByColumnRow(columnIndex: titleStartCol, rowIndex: 2),
+        excel_lib.CellIndex.indexByColumnRow(
+          columnIndex: titleStartCol,
+          rowIndex: 2,
+        ),
         metaStyle,
       );
 
@@ -1147,11 +1273,20 @@ class _CashFlowTabState extends State<CashFlowTab>
         metaStyle,
       );
       sheet.merge(
-        excel_lib.CellIndex.indexByColumnRow(columnIndex: titleStartCol, rowIndex: 3),
-        excel_lib.CellIndex.indexByColumnRow(columnIndex: titleEndCol, rowIndex: 3),
+        excel_lib.CellIndex.indexByColumnRow(
+          columnIndex: titleStartCol,
+          rowIndex: 3,
+        ),
+        excel_lib.CellIndex.indexByColumnRow(
+          columnIndex: titleEndCol,
+          rowIndex: 3,
+        ),
       );
       sheet.setMergedCellStyle(
-        excel_lib.CellIndex.indexByColumnRow(columnIndex: titleStartCol, rowIndex: 3),
+        excel_lib.CellIndex.indexByColumnRow(
+          columnIndex: titleStartCol,
+          rowIndex: 3,
+        ),
         metaStyle,
       );
 
@@ -1162,7 +1297,12 @@ class _CashFlowTabState extends State<CashFlowTab>
 
       int row = 6;
       void writePeriodHeader(String title, {bool includePeriods = true}) {
-        setCell(labelCol, row, excel_lib.TextCellValue(title), headerBlueLabelStyle);
+        setCell(
+          labelCol,
+          row,
+          excel_lib.TextCellValue(title),
+          headerBlueLabelStyle,
+        );
         for (int i = 0; i < keys.length; i++) {
           setCell(
             amountCol(i),
@@ -1171,11 +1311,20 @@ class _CashFlowTabState extends State<CashFlowTab>
             headerBlueStyle,
           );
           sheet.merge(
-            excel_lib.CellIndex.indexByColumnRow(columnIndex: symbolCol(i), rowIndex: row),
-            excel_lib.CellIndex.indexByColumnRow(columnIndex: amountCol(i), rowIndex: row),
+            excel_lib.CellIndex.indexByColumnRow(
+              columnIndex: symbolCol(i),
+              rowIndex: row,
+            ),
+            excel_lib.CellIndex.indexByColumnRow(
+              columnIndex: amountCol(i),
+              rowIndex: row,
+            ),
           );
           sheet.setMergedCellStyle(
-            excel_lib.CellIndex.indexByColumnRow(columnIndex: symbolCol(i), rowIndex: row),
+            excel_lib.CellIndex.indexByColumnRow(
+              columnIndex: symbolCol(i),
+              rowIndex: row,
+            ),
             headerBlueStyle,
           );
         }
@@ -1199,8 +1348,8 @@ class _CashFlowTabState extends State<CashFlowTab>
           cashBand
               ? cashBandLabelStyle
               : (total
-                  ? totalLabelStyle
-                  : (bold ? sectionLabelStyle : lineLabelStyle)),
+                    ? totalLabelStyle
+                    : (bold ? sectionLabelStyle : lineLabelStyle)),
         );
       }
 
@@ -1245,7 +1394,12 @@ class _CashFlowTabState extends State<CashFlowTab>
             );
             continue;
           }
-          setCell(symbolCol(i), row, excel_lib.TextCellValue('\$'), symbolStyle);
+          setCell(
+            symbolCol(i),
+            row,
+            excel_lib.TextCellValue('\$'),
+            symbolStyle,
+          );
           setCell(amountCol(i), row, excel_lib.DoubleCellValue(v), valueStyle);
         }
       }
@@ -1287,8 +1441,18 @@ class _CashFlowTabState extends State<CashFlowTab>
       void writeSectionSpacer() {
         setCell(labelCol, row, excel_lib.TextCellValue(' '), dividerStyle);
         for (int i = 0; i < keys.length; i++) {
-          setCell(symbolCol(i), row, excel_lib.TextCellValue(' '), dividerStyle);
-          setCell(amountCol(i), row, excel_lib.TextCellValue(' '), dividerStyle);
+          setCell(
+            symbolCol(i),
+            row,
+            excel_lib.TextCellValue(' '),
+            dividerStyle,
+          );
+          setCell(
+            amountCol(i),
+            row,
+            excel_lib.TextCellValue(' '),
+            dividerStyle,
+          );
         }
         sheet.setRowHeight(row, 7);
         row++;
@@ -1307,8 +1471,16 @@ class _CashFlowTabState extends State<CashFlowTab>
       writeRow('Accounts Payable', accountsPayableMap, indent: true);
       writeRow('Unearned Revenue', unearnedRevenueMap, indent: true);
       writeRow('Income taxes', incomeTaxesMap, indent: true);
-      writeRow('Other Current Liabilities', otherCurrentLiabilitiesMap, indent: true);
-      writeRow('Other long-term liabilities', otherLongTermLiabilitiesMap, indent: true);
+      writeRow(
+        'Other Current Liabilities',
+        otherCurrentLiabilitiesMap,
+        indent: true,
+      );
+      writeRow(
+        'Other long-term liabilities',
+        otherLongTermLiabilitiesMap,
+        indent: true,
+      );
       writeRow('Dividends', dividendsOperatingMap, indent: true);
       writeRow('Other', workingCapitalOtherMap, indent: true);
       writeRow(
@@ -1320,9 +1492,21 @@ class _CashFlowTabState extends State<CashFlowTab>
       writeSectionSpacer();
 
       writePeriodHeader('Investing Activities', includePeriods: true);
-      writeRow('Proceeds from sales of long-term assets', proceedsSaleMap, indent: true);
-      writeRow('Purchases of property, plant and equipment', ppePurchasesMap, indent: true);
-      writeRow('Purchases of intangible assets', intangiblePurchasesMap, indent: true);
+      writeRow(
+        'Proceeds from sales of long-term assets',
+        proceedsSaleMap,
+        indent: true,
+      );
+      writeRow(
+        'Purchases of property, plant and equipment',
+        ppePurchasesMap,
+        indent: true,
+      );
+      writeRow(
+        'Purchases of intangible assets',
+        intangiblePurchasesMap,
+        indent: true,
+      );
       writeRow('Other', investingOtherTemplateMap, indent: true);
       writeRow(
         'Net Cash from Investing Activities',
@@ -1336,7 +1520,11 @@ class _CashFlowTabState extends State<CashFlowTab>
       writeRow('Issue of share capital', issueShareCapitalMap, indent: true);
       writeRow('Stock issuance', stockIssuanceMap, indent: true);
       writeRow('Interest paid', interestPaidMap, indent: true);
-      writeRow('Capital repayments (including share buy-backs)', capitalRepaymentsMap, indent: true);
+      writeRow(
+        'Capital repayments (including share buy-backs)',
+        capitalRepaymentsMap,
+        indent: true,
+      );
       writeRow('Loan paid', loanPaidMap, indent: true);
       writeRow('Dividends', dividendsFinancingMap, indent: true);
       writeRow('Other', financingOtherTemplateMap, indent: true);
@@ -1349,7 +1537,11 @@ class _CashFlowTabState extends State<CashFlowTab>
       writeSectionSpacer();
 
       writeRow('Beginning Cash Balance', beginningCashMap, cashBand: true);
-      writeRow('Change in Cash & Cash Equivalents', netChangeMap, cashBand: false);
+      writeRow(
+        'Change in Cash & Cash Equivalents',
+        netChangeMap,
+        cashBand: false,
+      );
       writeRow('Ending Cash Balance', endingCashMap, cashBand: true);
 
       List<int> hideGridLines(List<int> xlsxBytes) {
@@ -1372,7 +1564,9 @@ class _CashFlowTabState extends State<CashFlowTab>
             archive.addFile(ArchiveFile(file.name, patched.length, patched));
             changed = true;
           }
-          return changed ? (ZipEncoder().encode(archive) ?? xlsxBytes) : xlsxBytes;
+          return changed
+              ? (ZipEncoder().encode(archive) ?? xlsxBytes)
+              : xlsxBytes;
         } catch (_) {
           return xlsxBytes;
         }
@@ -1389,7 +1583,8 @@ class _CashFlowTabState extends State<CashFlowTab>
       await downloadFile(
         exportName,
         outputBytes,
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
     } catch (e, st) {
       dev.log('Excel Export Error: $e\n$st');
@@ -1398,7 +1593,11 @@ class _CashFlowTabState extends State<CashFlowTab>
   }
 
   // Helper method to update filter and trigger data fetch
-  Future<void> _updateFilter(int index, FinancialReportController controller, {int? year}) async {
+  Future<void> _updateFilter(
+    int index,
+    FinancialReportController controller, {
+    int? year,
+  }) async {
     final DateTime now = DateTime.now();
     final DateTime today = DateTime(now.year, now.month, now.day);
     DateTime? start;
@@ -1440,94 +1639,147 @@ class _CashFlowTabState extends State<CashFlowTab>
         final isDark = Theme.of(context).brightness == Brightness.dark;
         return Dialog(
           backgroundColor: isDark ? const Color(0xFF0F1E37) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: Container(
             padding: const EdgeInsets.all(24),
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppText("Select Date Range", fontSize: 18, fontWeight: FontWeight.bold, color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87),
-              const SizedBox(height: 24),
-              SfDateRangePicker(
-                view: DateRangePickerView.month,
-                selectionMode: DateRangePickerSelectionMode.range,
-                headerStyle: DateRangePickerHeaderStyle(
-                  textStyle: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AppText(
+                  "Select Date Range",
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : Colors.black87,
                 ),
-                monthCellStyle: DateRangePickerMonthCellStyle(
-                  textStyle: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white70 : Colors.black54),
-                  todayTextStyle: const TextStyle(color: orangeColor),
-                ),
-                rangeSelectionColor: orangeColor.withValues(alpha: 0.1),
-                startRangeSelectionColor: orangeColor,
-                endRangeSelectionColor: orangeColor,
-                todayHighlightColor: orangeColor,
-                onSelectionChanged: (DateRangePickerSelectionChangedArgs args) {
-                  if (args.value is PickerDateRange) {
-                    tempStart = args.value.startDate;
-                    tempEnd = args.value.endDate;
-                  }
-                },
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: AppText("Close", color: isDark ? Colors.white38 : Colors.black38),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: orangeColor,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                const SizedBox(height: 24),
+                SfDateRangePicker(
+                  view: DateRangePickerView.month,
+                  selectionMode: DateRangePickerSelectionMode.range,
+                  headerStyle: DateRangePickerHeaderStyle(
+                    textStyle: TextStyle(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : Colors.black87,
+                      fontWeight: FontWeight.bold,
                     ),
-                    onPressed: () {
-                      if (tempStart != null && tempEnd != null) {
-                        final ts = tempStart!;
-                        final te = tempEnd!;
-                        final s = DateTime(ts.year, ts.month, ts.day);
-                        final e = DateTime(te.year, te.month, te.day);
-                        setState(() {
-                          _selectedFilterIdx = 5;
-                          _startDate = s;
-                          _endDate = e;
-                        });
-                        controller.fetchAndAggregateData(startDate: s, endDate: e);
-                        Navigator.pop(context);
-                      }
-                    },
-                    child: const AppText("Select", color: Colors.black, fontWeight: FontWeight.bold),
                   ),
-                ],
-              ),
-            ],
+                  monthCellStyle: DateRangePickerMonthCellStyle(
+                    textStyle: TextStyle(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white70
+                          : Colors.black54,
+                    ),
+                    todayTextStyle: const TextStyle(color: orangeColor),
+                  ),
+                  rangeSelectionColor: orangeColor.withValues(alpha: 0.1),
+                  startRangeSelectionColor: orangeColor,
+                  endRangeSelectionColor: orangeColor,
+                  todayHighlightColor: orangeColor,
+                  onSelectionChanged:
+                      (DateRangePickerSelectionChangedArgs args) {
+                        if (args.value is PickerDateRange) {
+                          tempStart = args.value.startDate;
+                          tempEnd = args.value.endDate;
+                        }
+                      },
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: AppText(
+                        "Close",
+                        color: isDark ? Colors.white38 : Colors.black38,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: orangeColor,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: () {
+                        if (tempStart != null && tempEnd != null) {
+                          final ts = tempStart!;
+                          final te = tempEnd!;
+                          final s = DateTime(ts.year, ts.month, ts.day);
+                          final e = DateTime(te.year, te.month, te.day);
+                          setState(() {
+                            _selectedFilterIdx = 5;
+                            _startDate = s;
+                            _endDate = e;
+                          });
+                          controller.fetchAndAggregateData(
+                            startDate: s,
+                            endDate: e,
+                          );
+                          Navigator.pop(context);
+                        }
+                      },
+                      child: const AppText(
+                        "Select",
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
-      );
-    },
-  );
-}
+        );
+      },
+    );
+  }
 
   Widget _buildTimeFilter(FinancialReportController controller) {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark ? Colors.black26 : Colors.grey.withValues(alpha: 0.1),
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.black26
+            : Colors.grey.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Wrap(
         spacing: 4,
         runSpacing: 4,
         children: [
-          _filterItem("7 Days", _selectedFilterIdx == 0, () => _updateFilter(0, controller)),
-          _filterItem("30 Days", _selectedFilterIdx == 1, () => _updateFilter(1, controller)),
-          _filterItem("3 Months", _selectedFilterIdx == 2, () => _updateFilter(2, controller)),
-          _filterItem("12 Months", _selectedFilterIdx == 3, () => _updateFilter(3, controller)),
+          _filterItem(
+            "7 Days",
+            _selectedFilterIdx == 0,
+            () => _updateFilter(0, controller),
+          ),
+          _filterItem(
+            "30 Days",
+            _selectedFilterIdx == 1,
+            () => _updateFilter(1, controller),
+          ),
+          _filterItem(
+            "3 Months",
+            _selectedFilterIdx == 2,
+            () => _updateFilter(2, controller),
+          ),
+          _filterItem(
+            "12 Months",
+            _selectedFilterIdx == 3,
+            () => _updateFilter(3, controller),
+          ),
           _buildYearDropdown(controller),
-          _filterItem("Custom", _selectedFilterIdx == 5, () => _selectCustomRange(controller)),
+          _filterItem(
+            "Custom",
+            _selectedFilterIdx == 5,
+            () => _selectCustomRange(controller),
+          ),
         ],
       ),
     );
@@ -1543,10 +1795,23 @@ class _CashFlowTabState extends State<CashFlowTab>
     return PopupMenuButton<int>(
       offset: const Offset(0, 40),
       onSelected: (year) => _updateFilter(4, controller, year: year),
-      itemBuilder: (context) => years.map((y) => PopupMenuItem(
-        value: y,
-        child: Text('$y', style: TextStyle(fontSize: 13, color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87, fontFamily: 'Outfit')), // Standard Text to avoid AppText's auto-formatting
-      )).toList(),
+      itemBuilder: (context) => years
+          .map(
+            (y) => PopupMenuItem(
+              value: y,
+              child: Text(
+                '$y',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : Colors.black87,
+                  fontFamily: 'Outfit',
+                ),
+              ), // Standard Text to avoid AppText's auto-formatting
+            ),
+          )
+          .toList(),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
@@ -1564,16 +1829,34 @@ class _CashFlowTabState extends State<CashFlowTab>
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              isSelected ? (_selectedYear != null ? '$_selectedYear' : "Yearly") : "Yearly",
+              isSelected
+                  ? (_selectedYear != null ? '$_selectedYear' : "Yearly")
+                  : "Yearly",
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87) : (Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black45),
+                color: isSelected
+                    ? (Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : Colors.black87)
+                    : (Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white38
+                          : Colors.black45),
                 fontFamily: 'Outfit',
               ),
             ),
             const SizedBox(width: 4),
-            Icon(Icons.keyboard_arrow_down, size: 12, color: isSelected ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87) : (Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black45)),
+            Icon(
+              Icons.keyboard_arrow_down,
+              size: 12,
+              color: isSelected
+                  ? (Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black87)
+                  : (Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white38
+                        : Colors.black45),
+            ),
           ],
         ),
       ),
@@ -1586,15 +1869,31 @@ class _CashFlowTabState extends State<CashFlowTab>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E293B) : Colors.black.withValues(alpha: 0.05)) : Colors.transparent,
+          color: isSelected
+              ? (Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF1E293B)
+                    : Colors.black.withValues(alpha: 0.05))
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: isSelected ? Border.all(color: Theme.of(context).brightness == Brightness.dark ? Colors.white12 : Colors.black12) : null,
+          border: isSelected
+              ? Border.all(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white12
+                      : Colors.black12,
+                )
+              : null,
         ),
         child: AppText(
           text,
           fontSize: 11,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: isSelected ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87) : (Theme.of(context).brightness == Brightness.dark ? Colors.white38 : Colors.black45),
+          color: isSelected
+              ? (Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black87)
+              : (Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white38
+                    : Colors.black45),
         ),
       ),
     );
@@ -1635,10 +1934,10 @@ class _CashFlowTabState extends State<CashFlowTab>
     final nice = normalized <= 1
         ? 1
         : normalized <= 2
-            ? 2
-            : normalized <= 5
-                ? 5
-                : 10;
+        ? 2
+        : normalized <= 5
+        ? 5
+        : 10;
     return nice * magnitude;
   }
 
@@ -1651,86 +1950,65 @@ class _CashFlowTabState extends State<CashFlowTab>
     const netCashColor = Color(0xFFF2C94C);
     final textPrimary = isDark ? Colors.white : Colors.black87;
     final textSecondary = isDark ? Colors.white70 : Colors.black54;
-    final backgroundColor = isDark ? const Color(0xFF071223) : const Color(0xFFF8FAFC);
+    final backgroundColor = isDark
+        ? const Color(0xFF071223)
+        : const Color(0xFFF8FAFC);
     final screenWidth = MediaQuery.sizeOf(context).width;
     final isNarrow = screenWidth <= 1024;
 
     return GetBuilder<FinancialReportController>(
-        tag: getCurrentOrganization!.id.toString(),
-        builder: (controller) {
-          if (controller.isLoading.value && !controller.hasPresentedFinancialData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      tag: getCurrentOrganization!.id.toString(),
+      builder: (controller) {
+        if (controller.isLoading.value &&
+            !controller.hasPresentedFinancialData) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-          final trendSeries = controller.trendChartSeries;
-          final operatingCash = controller.operatingCashFlow.value;
-          final investingCash = controller.investingCashFlow.value;
-          final financingCash = controller.financingCashFlow.value;
-          final unrealizedIn = controller.upcomingReceivables.value;
-          final unrealizedOut = controller.upcomingPayables.value;
-          final unrealizedNet = unrealizedIn - unrealizedOut;
-          final includeUnrealized = !controller.isRealizedView.value;
-          final adjustedOperatingCash = includeUnrealized
-              ? operatingCash + unrealizedNet
-              : operatingCash;
-          final statementNetCash =
-              adjustedOperatingCash + investingCash + financingCash;
-          final topTotals = includeUnrealized
-              ? (
-                  moneyIn: controller.cashInflow.value + unrealizedIn,
-                  moneyOut: controller.cashOutflow.value + unrealizedOut,
-                )
-              : _cashFlowDirectionTotals(
-                  operatingCash: operatingCash,
-                  investingCash: investingCash,
-                  financingCash: financingCash,
-                );
-          final totalIn = topTotals.moneyIn;
-          final totalOut = topTotals.moneyOut;
-          final netCash = totalIn - totalOut;
+        final trendSeries = controller.trendChartSeries;
+        final operatingCash = controller.operatingCashFlow.value;
+        final investingCash = controller.investingCashFlow.value;
+        final financingCash = controller.financingCashFlow.value;
+        final unrealizedIn = controller.upcomingReceivables.value;
+        final unrealizedOut = controller.upcomingPayables.value;
+        final unrealizedNet = unrealizedIn - unrealizedOut;
+        final includeUnrealized = !controller.isRealizedView.value;
+        final adjustedOperatingCash = includeUnrealized
+            ? operatingCash + unrealizedNet
+            : operatingCash;
+        final statementNetCash =
+            adjustedOperatingCash + investingCash + financingCash;
+        final topTotals = includeUnrealized
+            ? (
+                moneyIn: controller.cashInflow.value + unrealizedIn,
+                moneyOut: controller.cashOutflow.value + unrealizedOut,
+              )
+            : _cashFlowDirectionTotals(
+                operatingCash: operatingCash,
+                investingCash: investingCash,
+                financingCash: financingCash,
+              );
+        final totalIn = topTotals.moneyIn;
+        final totalOut = topTotals.moneyOut;
+        final netCash = totalIn - totalOut;
 
-          final prevIn = controller.prevPeriodCashInflow.value;
-          final prevOut = controller.prevPeriodCashOutflow.value;
-          final prevNet = prevIn - prevOut;
+        final prevIn = controller.prevPeriodCashInflow.value;
+        final prevOut = controller.prevPeriodCashOutflow.value;
+        final prevNet = prevIn - prevOut;
 
-          final double incomeChange = _percentChange(totalIn, prevIn);
-          final double expensesChange = _percentChange(totalOut, prevOut);
-          final double netCashChange = _percentChange(netCash, prevNet);
+        final double incomeChange = _percentChange(totalIn, prevIn);
+        final double expensesChange = _percentChange(totalOut, prevOut);
+        final double netCashChange = _percentChange(netCash, prevNet);
 
-          return Container(
-            color: backgroundColor,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 🔹 Title & Filter Header
-                  isNarrow 
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AppText(
-                          "Cash Flow",
-                          fontSize: 28,
-                          fontWeight: FontWeight.w900,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                        const SizedBox(height: 12),
-                        _buildTimeFilter(controller),
-                        if (_startDate != null && _endDate != null) ...[
-                          const SizedBox(height: 8),
-                          AppText(
-                            "${DateFormat('MMM dd, yyyy').format(_startDate!)} – ${DateFormat('MMM dd, yyyy').format(_endDate!)}",
-                            fontSize: 12,
-                            color: isDark ? Colors.white38 : Colors.black45,
-                          ),
-                        ],
-                      ],
-                    )
-                  : Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
+        return Container(
+          color: backgroundColor,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 🔹 Title & Filter Header
+                isNarrow
+                    ? Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           AppText(
@@ -1739,8 +2017,10 @@ class _CashFlowTabState extends State<CashFlowTab>
                             fontWeight: FontWeight.w900,
                             color: isDark ? Colors.white : Colors.black87,
                           ),
+                          const SizedBox(height: 12),
+                          _buildTimeFilter(controller),
                           if (_startDate != null && _endDate != null) ...[
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 8),
                             AppText(
                               "${DateFormat('MMM dd, yyyy').format(_startDate!)} – ${DateFormat('MMM dd, yyyy').format(_endDate!)}",
                               fontSize: 12,
@@ -1748,227 +2028,321 @@ class _CashFlowTabState extends State<CashFlowTab>
                             ),
                           ],
                         ],
-                      ),
-                      _buildTimeFilter(controller),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      alignment: WrapAlignment.end,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        PopupMenuButton<String>(
-                          offset: const Offset(0, 40),
-                          color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                          elevation: 8,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          onSelected: (value) {
-                            if (value == 'csv') _exportCSV(controller);
-                            if (value == 'pdf') {
-                              ExportModalWidget.showPdfModal(
-                                context: context,
-                                companyName:
-                                    (getCurrentOrganization?.name ?? '')
-                                            .trim()
-                                            .isNotEmpty
-                                        ? (getCurrentOrganization?.name ?? '')
-                                              .trim()
-                                        : 'Booksmart',
-                                companyAddress: [
-                                  (getCurrentOrganization?.street ?? '').trim(),
-                                  [
-                                    (getCurrentOrganization?.city ?? '').trim(),
-                                    (getCurrentOrganization?.primaryState ?? '').trim(),
-                                    (getCurrentOrganization?.zip ?? '').trim(),
-                                  ].where((e) => e.isNotEmpty).join(', '),
-                                ].where((e) => e.isNotEmpty).join('\n'),
-                                reportType: ExportPdfReportType.cashFlow,
-                                initialStartDate: _startDate,
-                                initialEndDate: _endDate,
-                                onExport: (request) async {
-                                  final bool sameRange = _isSameRange(
-                                    request.startDate,
-                                    request.endDate,
-                                  );
-                                  setState(() {
-                                    _startDate = request.startDate;
-                                    _endDate = request.endDate;
-                                  });
-                                  if (!sameRange) {
-                                    await controller.fetchAndAggregateData(
-                                      startDate: request.startDate,
-                                      endDate: request.endDate,
-                                    );
-                                  }
-                                  final liveData = await _buildCashFlowPdfData(
-                                    controller,
-                                    request,
-                                  );
-                                  await PdfExportService()
-                                      .exportCashFlowPresentationPdf(
-                                        request,
-                                        cashFlowData: liveData,
-                                      );
-                                },
-                              );
-                            }
-                            if (value == 'excel') {
-                              ExportModalWidget.showExcelModal(
-                                context: context,
-                                companyName:
-                                    (getCurrentOrganization?.name ?? '')
-                                            .trim()
-                                            .isNotEmpty
-                                        ? (getCurrentOrganization?.name ?? '')
-                                              .trim()
-                                        : 'Booksmart',
-                                companyAddress: [
-                                  (getCurrentOrganization?.street ?? '').trim(),
-                                  [
-                                    (getCurrentOrganization?.city ?? '').trim(),
-                                    (getCurrentOrganization?.primaryState ?? '').trim(),
-                                    (getCurrentOrganization?.zip ?? '').trim(),
-                                  ].where((e) => e.isNotEmpty).join(', '),
-                                ].where((e) => e.isNotEmpty).join('\n'),
-                                reportType: ExportPdfReportType.cashFlow,
-                                initialStartDate: _startDate,
-                                initialEndDate: _endDate,
-                                onExport: (request) async {
-                                  final bool sameRange = _isSameRange(
-                                    request.startDate,
-                                    request.endDate,
-                                  );
-                                  setState(() {
-                                    _startDate = request.startDate;
-                                    _endDate = request.endDate;
-                                  });
-                                  if (!sameRange) {
-                                    await controller.fetchAndAggregateData(
-                                      startDate: request.startDate,
-                                      endDate: request.endDate,
-                                    );
-                                  }
-                                  _exportExcel(
-                                    controller,
-                                    request: request,
-                                  );
-                                },
-                              );
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            PopupMenuItem(value: 'csv', child: AppText("Export CSV", fontSize: 13, color: isDark ? Colors.white : Colors.black87)),
-                            PopupMenuItem<String>(height: 1, padding: EdgeInsets.zero, enabled: false, child: Divider(height: 1, thickness: 0.2, color: isDark ? Colors.white24 : Colors.black12)),
-                            PopupMenuItem(value: 'pdf', child: AppText("Export PDF", fontSize: 13, color: isDark ? Colors.white : Colors.black87)),
-                            PopupMenuItem<String>(height: 1, padding: EdgeInsets.zero, enabled: false, child: Divider(height: 1, thickness: 0.2, color: isDark ? Colors.white24 : Colors.black12)),
-                            PopupMenuItem(value: 'excel', child: AppText("Export Excel", fontSize: 13, color: isDark ? Colors.white : Colors.black87)),
-                          ],
-                          child: Builder(
-                            builder: (context) {
-                              bool isHovered = false;
-                              return StatefulBuilder(
-                                builder: (context, setState) {
-                                  return MouseRegion(
-                                    onEnter: (_) => setState(() => isHovered = true),
-                                    onExit: (_) => setState(() => isHovered = false),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                      decoration: BoxDecoration(
-                                        color: isHovered ? orangeColor.withValues(alpha: 0.1) : Colors.transparent,
-                                        border: Border.all(color: orangeColor, width: 1.2),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: const [
-                                          AppText("EXPORT", fontSize: 12, fontWeight: FontWeight.w600, color: orangeColor),
-                                          SizedBox(width: 6),
-                                          Icon(Icons.keyboard_arrow_down, size: 16, color: orangeColor),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () => showUploadTaxDocumentDialog(type: 'cf'),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: orangeColor, width: 1.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const AppText(
-                              "UPLOAD",
-                              color: orangeColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        InkWell(
-                          onTap: () => _showManualCashFlowDialog(controller),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: orangeColor, width: 1.2),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const AppText(
-                              "ADJUST CASH FLOW",
-                              color: orangeColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Obx(
-                          () => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: isDark
-                                  ? Colors.white.withValues(alpha: 0.04)
-                                  : Colors.black.withValues(alpha: 0.02),
-                              border: Border.all(
-                                color: isDark ? Colors.white12 : Colors.black12,
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AppText(
+                                "Cash Flow",
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                                color: isDark ? Colors.white : Colors.black87,
                               ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
+                              if (_startDate != null && _endDate != null) ...[
+                                const SizedBox(height: 4),
                                 AppText(
-                                  controller.isRealizedView.value ? "Showing: paid" : "Showing: paid + unpaid",
-                                  fontSize: 11,
-                                  color: isDark ? Colors.white70 : Colors.black54,
-                                  disableFormat: true,
-                                ),
-                                const SizedBox(width: 6),
-                                Switch(
-                                  value: controller.isRealizedView.value,
-                                  activeColor: orangeColor,
-                                  onChanged: (v) => controller.toggleRealizedView(v),
+                                  "${DateFormat('MMM dd, yyyy').format(_startDate!)} – ${DateFormat('MMM dd, yyyy').format(_endDate!)}",
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? Colors.white38
+                                      : Colors.black45,
                                 ),
                               ],
+                            ],
+                          ),
+                          _buildTimeFilter(controller),
+                        ],
+                      ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      PopupMenuButton<String>(
+                        offset: const Offset(0, 40),
+                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        elevation: 8,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        onSelected: (value) {
+                          if (value == 'csv') _exportCSV(controller);
+                          if (value == 'pdf') {
+                            ExportModalWidget.showPdfModal(
+                              context: context,
+                              companyName:
+                                  (getCurrentOrganization?.name ?? '')
+                                      .trim()
+                                      .isNotEmpty
+                                  ? (getCurrentOrganization?.name ?? '').trim()
+                                  : 'Booksmart',
+                              companyAddress: [
+                                (getCurrentOrganization?.street ?? '').trim(),
+                                [
+                                  (getCurrentOrganization?.city ?? '').trim(),
+                                  (getCurrentOrganization?.primaryState ?? '')
+                                      .trim(),
+                                  (getCurrentOrganization?.zip ?? '').trim(),
+                                ].where((e) => e.isNotEmpty).join(', '),
+                              ].where((e) => e.isNotEmpty).join('\n'),
+                              reportType: ExportPdfReportType.cashFlow,
+                              initialStartDate: _startDate,
+                              initialEndDate: _endDate,
+                              onExport: (request) async {
+                                final bool sameRange = _isSameRange(
+                                  request.startDate,
+                                  request.endDate,
+                                );
+                                setState(() {
+                                  _startDate = request.startDate;
+                                  _endDate = request.endDate;
+                                });
+                                if (!sameRange) {
+                                  await controller.fetchAndAggregateData(
+                                    startDate: request.startDate,
+                                    endDate: request.endDate,
+                                  );
+                                }
+                                final liveData = await _buildCashFlowPdfData(
+                                  controller,
+                                  request,
+                                );
+                                await PdfExportService()
+                                    .exportCashFlowPresentationPdf(
+                                      request,
+                                      cashFlowData: liveData,
+                                    );
+                              },
+                            );
+                          }
+                          if (value == 'excel') {
+                            ExportModalWidget.showExcelModal(
+                              context: context,
+                              companyName:
+                                  (getCurrentOrganization?.name ?? '')
+                                      .trim()
+                                      .isNotEmpty
+                                  ? (getCurrentOrganization?.name ?? '').trim()
+                                  : 'Booksmart',
+                              companyAddress: [
+                                (getCurrentOrganization?.street ?? '').trim(),
+                                [
+                                  (getCurrentOrganization?.city ?? '').trim(),
+                                  (getCurrentOrganization?.primaryState ?? '')
+                                      .trim(),
+                                  (getCurrentOrganization?.zip ?? '').trim(),
+                                ].where((e) => e.isNotEmpty).join(', '),
+                              ].where((e) => e.isNotEmpty).join('\n'),
+                              reportType: ExportPdfReportType.cashFlow,
+                              initialStartDate: _startDate,
+                              initialEndDate: _endDate,
+                              onExport: (request) async {
+                                final bool sameRange = _isSameRange(
+                                  request.startDate,
+                                  request.endDate,
+                                );
+                                setState(() {
+                                  _startDate = request.startDate;
+                                  _endDate = request.endDate;
+                                });
+                                if (!sameRange) {
+                                  await controller.fetchAndAggregateData(
+                                    startDate: request.startDate,
+                                    endDate: request.endDate,
+                                  );
+                                }
+                                _exportExcel(controller, request: request);
+                              },
+                            );
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'csv',
+                            child: AppText(
+                              "Export CSV",
+                              fontSize: 13,
+                              color: isDark ? Colors.white : Colors.black87,
                             ),
                           ),
+                          PopupMenuItem<String>(
+                            height: 1,
+                            padding: EdgeInsets.zero,
+                            enabled: false,
+                            child: Divider(
+                              height: 1,
+                              thickness: 0.2,
+                              color: isDark ? Colors.white24 : Colors.black12,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'pdf',
+                            child: AppText(
+                              "Export PDF",
+                              fontSize: 13,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          PopupMenuItem<String>(
+                            height: 1,
+                            padding: EdgeInsets.zero,
+                            enabled: false,
+                            child: Divider(
+                              height: 1,
+                              thickness: 0.2,
+                              color: isDark ? Colors.white24 : Colors.black12,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'excel',
+                            child: AppText(
+                              "Export Excel",
+                              fontSize: 13,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ],
+                        child: Builder(
+                          builder: (context) {
+                            bool isHovered = false;
+                            return StatefulBuilder(
+                              builder: (context, setState) {
+                                return MouseRegion(
+                                  onEnter: (_) =>
+                                      setState(() => isHovered = true),
+                                  onExit: (_) =>
+                                      setState(() => isHovered = false),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isHovered
+                                          ? orangeColor.withValues(alpha: 0.1)
+                                          : Colors.transparent,
+                                      border: Border.all(
+                                        color: orangeColor,
+                                        width: 1.2,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        AppText(
+                                          "EXPORT",
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: orangeColor,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Icon(
+                                          Icons.keyboard_arrow_down,
+                                          size: 16,
+                                          color: orangeColor,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
                         ),
-                      ],
-                    ),
+                      ),
+                      InkWell(
+                        onTap: () => showUploadTaxDocumentDialog(type: 'cf'),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: orangeColor, width: 1.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const AppText(
+                            "UPLOAD",
+                            color: orangeColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      InkWell(
+                        onTap: () => _showManualCashFlowDialog(controller),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: orangeColor, width: 1.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const AppText(
+                            "ADJUST CASH FLOW",
+                            color: orangeColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Obx(
+                        () => Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.04)
+                                : Colors.black.withValues(alpha: 0.02),
+                            border: Border.all(
+                              color: isDark ? Colors.white12 : Colors.black12,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AppText(
+                                controller.isRealizedView.value
+                                    ? "Showing: paid"
+                                    : "Showing: paid + unpaid",
+                                fontSize: 11,
+                                color: isDark ? Colors.white70 : Colors.black54,
+                                disableFormat: true,
+                              ),
+                              const SizedBox(width: 6),
+                              Switch(
+                                value: controller.isRealizedView.value,
+                                activeColor: orangeColor,
+                                onChanged: (v) =>
+                                    controller.toggleRealizedView(v),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 24),
-                  LayoutBuilder(builder: (context, constraints) {
+                ),
+                const SizedBox(height: 24),
+                LayoutBuilder(
+                  builder: (context, constraints) {
                     return isNarrow
                         ? Wrap(
                             spacing: 12,
@@ -1976,15 +2350,51 @@ class _CashFlowTabState extends State<CashFlowTab>
                             children: [
                               SizedBox(
                                 width: screenWidth - 32,
-                                child: _premiumKPICard(title: "Money In", value: _formatCurrency(totalIn), change: incomeChange, comparisonUnavailable: _isComparisonUnavailable(totalIn, prevIn), isCurrency: true, timeframe: _getTimeframeLabel(), valueColor: moneyInColor),
+                                child: _premiumKPICard(
+                                  title: "Money In",
+                                  value: _formatCurrency(totalIn),
+                                  change: incomeChange,
+                                  comparisonUnavailable:
+                                      _isComparisonUnavailable(totalIn, prevIn),
+                                  isCurrency: true,
+                                  timeframe: _getTimeframeLabel(),
+                                  valueColor: moneyInColor,
+                                ),
                               ),
                               SizedBox(
                                 width: screenWidth - 32,
-                                child: _premiumKPICard(title: "Money Out", value: _formatCurrency(totalOut), change: expensesChange, invertTrendColors: true, comparisonUnavailable: _isComparisonUnavailable(totalOut, prevOut), isCurrency: true, timeframe: _getTimeframeLabel(), valueColor: isDark ? Colors.white : Colors.black87),
+                                child: _premiumKPICard(
+                                  title: "Money Out",
+                                  value: _formatCurrency(totalOut),
+                                  change: expensesChange,
+                                  invertTrendColors: true,
+                                  comparisonUnavailable:
+                                      _isComparisonUnavailable(
+                                        totalOut,
+                                        prevOut,
+                                      ),
+                                  isCurrency: true,
+                                  timeframe: _getTimeframeLabel(),
+                                  valueColor: isDark
+                                      ? Colors.white
+                                      : Colors.black87,
+                                ),
                               ),
                               SizedBox(
                                 width: screenWidth - 32,
-                                child: _premiumKPICard(title: "Net Cash", value: _formatCurrency(netCash), change: netCashChange, comparisonUnavailable: _isComparisonUnavailable(netCash, prevNet), isCurrency: true, timeframe: _getTimeframeLabel(), isNetCash: true),
+                                child: _premiumKPICard(
+                                  title: "Net Cash",
+                                  value: _formatCurrency(netCash),
+                                  change: netCashChange,
+                                  comparisonUnavailable:
+                                      _isComparisonUnavailable(
+                                        netCash,
+                                        prevNet,
+                                      ),
+                                  isCurrency: true,
+                                  timeframe: _getTimeframeLabel(),
+                                  isNetCash: true,
+                                ),
                               ),
                             ],
                           )
@@ -1992,309 +2402,515 @@ class _CashFlowTabState extends State<CashFlowTab>
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Expanded(child: _premiumKPICard(title: "Money In", value: _formatCurrency(totalIn), change: incomeChange, comparisonUnavailable: _isComparisonUnavailable(totalIn, prevIn), isCurrency: true, timeframe: _getTimeframeLabel(), valueColor: moneyInColor)),
+                                Expanded(
+                                  child: _premiumKPICard(
+                                    title: "Money In",
+                                    value: _formatCurrency(totalIn),
+                                    change: incomeChange,
+                                    comparisonUnavailable:
+                                        _isComparisonUnavailable(
+                                          totalIn,
+                                          prevIn,
+                                        ),
+                                    isCurrency: true,
+                                    timeframe: _getTimeframeLabel(),
+                                    valueColor: moneyInColor,
+                                  ),
+                                ),
                                 const SizedBox(width: 12),
-                                Expanded(child: _premiumKPICard(title: "Money Out", value: _formatCurrency(totalOut), change: expensesChange, invertTrendColors: true, comparisonUnavailable: _isComparisonUnavailable(totalOut, prevOut), isCurrency: true, timeframe: _getTimeframeLabel(), valueColor: isDark ? Colors.white : Colors.black87)),
+                                Expanded(
+                                  child: _premiumKPICard(
+                                    title: "Money Out",
+                                    value: _formatCurrency(totalOut),
+                                    change: expensesChange,
+                                    invertTrendColors: true,
+                                    comparisonUnavailable:
+                                        _isComparisonUnavailable(
+                                          totalOut,
+                                          prevOut,
+                                        ),
+                                    isCurrency: true,
+                                    timeframe: _getTimeframeLabel(),
+                                    valueColor: isDark
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
                                 const SizedBox(width: 12),
-                                Expanded(child: _premiumKPICard(title: "Net Cash", value: _formatCurrency(netCash), change: netCashChange, comparisonUnavailable: _isComparisonUnavailable(netCash, prevNet), isCurrency: true, timeframe: _getTimeframeLabel(), isNetCash: true)),
+                                Expanded(
+                                  child: _premiumKPICard(
+                                    title: "Net Cash",
+                                    value: _formatCurrency(netCash),
+                                    change: netCashChange,
+                                    comparisonUnavailable:
+                                        _isComparisonUnavailable(
+                                          netCash,
+                                          prevNet,
+                                        ),
+                                    isCurrency: true,
+                                    timeframe: _getTimeframeLabel(),
+                                    isNetCash: true,
+                                  ),
+                                ),
                               ],
                             ),
                           );
-                  }),
-                  const SizedBox(height: 24),
+                  },
+                ),
+                const SizedBox(height: 24),
 
-                  // 🔹 Middle Section: Chart Area
-                  Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black12),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(isDark ? 0.15 : 0.03), blurRadius: 40, offset: const Offset(0, 10))
-                      ],
+                // 🔹 Middle Section: Chart Area
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.black12,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  AppText("Cash Flow Trend", fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
-                                  if (_showNetCash) ...[
-                                    const SizedBox(height: 4),
-                                    AppText(
-                                      controller.isRealizedView.value
-                                          ? "Yellow = net cash (paid only). Circles mark each period — not a separate unrealized line."
-                                          : "Yellow = net cash including unpaid/projected. Circles mark each period — still one net line, not two.",
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w500,
-                                      color: isDark ? Colors.white.withValues(alpha: 0.45) : Colors.black54,
-                                      disableFormat: true,
-                                    ),
-                                  ],
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 8,
-                                    runSpacing: 6,
-                                    crossAxisAlignment: WrapCrossAlignment.center,
-                                    children: [
-                                      if (_startDate != null && _endDate != null && controller.trendGranularityLabel.isNotEmpty)
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            AppText(
-                                              "${DateFormat('MMM dd, yyyy').format(_startDate!)} – ${DateFormat('MMM dd, yyyy').format(_endDate!)}",
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.w400,
-                                              color: isDark ? Colors.white38 : Colors.black45,
-                                            ),
-                                            Container(
-                                              width: 1,
-                                              height: 12,
-                                              margin: const EdgeInsets.symmetric(horizontal: 8),
-                                              color: Colors.white,
-                                            ),
-                                            AppText(
-                                              controller.trendGranularityLabel,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                              color: isDark ? Colors.white38 : Colors.black45,
-                                            ),
-                                          ],
-                                        )
-                                      else ...[
-                                        if (_startDate != null && _endDate != null)
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.15 : 0.03,
+                        ),
+                        blurRadius: 40,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                AppText(
+                                  "Cash Flow Trend",
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                                if (_showNetCash) ...[
+                                  const SizedBox(height: 4),
+                                  AppText(
+                                    controller.isRealizedView.value
+                                        ? "Yellow = net cash (paid only). Circles mark each period — not a separate unrealized line."
+                                        : "Yellow = net cash including unpaid/projected. Circles mark each period — still one net line, not two.",
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: isDark
+                                        ? Colors.white.withValues(alpha: 0.45)
+                                        : Colors.black54,
+                                    disableFormat: true,
+                                  ),
+                                ],
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    if (_startDate != null &&
+                                        _endDate != null &&
+                                        controller
+                                            .trendGranularityLabel
+                                            .isNotEmpty)
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
                                           AppText(
                                             "${DateFormat('MMM dd, yyyy').format(_startDate!)} – ${DateFormat('MMM dd, yyyy').format(_endDate!)}",
                                             fontSize: 10,
                                             fontWeight: FontWeight.w400,
-                                            color: isDark ? Colors.white38 : Colors.black45,
+                                            color: isDark
+                                                ? Colors.white38
+                                                : Colors.black45,
                                           ),
-                                        if (controller.trendGranularityLabel.isNotEmpty)
+                                          Container(
+                                            width: 1,
+                                            height: 12,
+                                            margin: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                            ),
+                                            color: Colors.white,
+                                          ),
                                           AppText(
                                             controller.trendGranularityLabel,
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
-                                            color: isDark ? Colors.white38 : Colors.black45,
+                                            color: isDark
+                                                ? Colors.white38
+                                                : Colors.black45,
                                           ),
-                                      ],
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _buildCashFlowMetricToggles(isDark),
-                                Container(
-                                  width: 1,
-                                  height: 18,
-                                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                                  color: isDark ? Colors.white24 : Colors.black12,
-                                ),
-                                InkWell(
-                                  onTap: () => setState(() => _comparePriorPeriod = !_comparePriorPeriod),
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        SizedBox(
-                                          width: 12,
-                                          height: 12,
-                                          child: Transform.scale(
-                                            scale: 0.78,
-                                            child: Checkbox(
-                                              value: _comparePriorPeriod,
-                                              onChanged: (v) => setState(() => _comparePriorPeriod = v ?? false),
-                                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                              visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                                              activeColor: orangeColor,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
+                                        ],
+                                      )
+                                    else ...[
+                                      if (_startDate != null &&
+                                          _endDate != null)
                                         AppText(
-                                          "vs prior month",
-                                          fontSize: 11,
-                                          color: isDark ? Colors.white54 : Colors.black45,
-                                          disableFormat: true,
+                                          "${DateFormat('MMM dd, yyyy').format(_startDate!)} – ${DateFormat('MMM dd, yyyy').format(_endDate!)}",
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w400,
+                                          color: isDark
+                                              ? Colors.white38
+                                              : Colors.black45,
                                         ),
-                                      ],
-                                    ),
-                                  ),
+                                      if (controller
+                                          .trendGranularityLabel
+                                          .isNotEmpty)
+                                        AppText(
+                                          controller.trendGranularityLabel,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark
+                                              ? Colors.white38
+                                              : Colors.black45,
+                                        ),
+                                    ],
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          height: 320,
-                          child: trendSeries.isEmpty
-                              ? Center(
-                                  child: AppText(
-                                    "Data will appear for this range",
-                                    color: isDark ? Colors.white38 : Colors.black45,
-                                  ),
-                                )
-                              : _buildCashFlowTrendChart(
-                                  controller,
-                                  trendSeries,
-                                  moneyInColor,
-                                  moneyOutColor,
-                                  netCashColor,
-                                  isDark,
-                                ),
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: double.infinity,
-                          child: Wrap(
-                            alignment: WrapAlignment.center,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 24,
-                            runSpacing: 8,
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (_showMoneyIn)
-                                _LegendItem(color: moneyInColor, label: "Money In", swatch: _LegendSwatch.solidSquare),
-                              if (_showMoneyOut)
-                                _LegendItem(color: moneyOutColor, label: "Money Out", swatch: _LegendSwatch.solidSquare),
-                              if (_showNetCash)
-                                _LegendItem(
-                                  color: netCashColor,
-                                  label: "Net Cash",
-                                  swatch: _LegendSwatch.lineSolid,
-                                  subtitle: controller.isRealizedView.value
-                                      ? "Paid transactions only"
-                                      : "Same yellow line; totals include unpaid",
+                              _buildCashFlowMetricToggles(isDark),
+                              Container(
+                                width: 1,
+                                height: 18,
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 8,
                                 ),
-                              if (_comparePriorPeriod)
-                                _LegendItem(
-                                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                                  label: "Prior net",
-                                  swatch: _LegendSwatch.lineDashedPrior,
-                                  subtitle: "Grey long-dash · prior month",
+                                color: isDark ? Colors.white24 : Colors.black12,
+                              ),
+                              InkWell(
+                                onTap: () => setState(
+                                  () => _comparePriorPeriod =
+                                      !_comparePriorPeriod,
                                 ),
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 12,
+                                        height: 12,
+                                        child: Transform.scale(
+                                          scale: 0.78,
+                                          child: Checkbox(
+                                            value: _comparePriorPeriod,
+                                            onChanged: (v) => setState(
+                                              () => _comparePriorPeriod =
+                                                  v ?? false,
+                                            ),
+                                            materialTapTargetSize:
+                                                MaterialTapTargetSize
+                                                    .shrinkWrap,
+                                            visualDensity: const VisualDensity(
+                                              horizontal: -4,
+                                              vertical: -4,
+                                            ),
+                                            activeColor: orangeColor,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      AppText(
+                                        "vs prior month",
+                                        fontSize: 11,
+                                        color: isDark
+                                            ? Colors.white54
+                                            : Colors.black45,
+                                        disableFormat: true,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ],
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        height: 320,
+                        child: trendSeries.isEmpty
+                            ? Center(
+                                child: AppText(
+                                  "Data will appear for this range",
+                                  color: isDark
+                                      ? Colors.white38
+                                      : Colors.black45,
+                                ),
+                              )
+                            : _buildCashFlowTrendChart(
+                                controller,
+                                trendSeries,
+                                moneyInColor,
+                                moneyOutColor,
+                                netCashColor,
+                                isDark,
+                              ),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 24,
+                          runSpacing: 8,
+                          children: [
+                            if (_showMoneyIn)
+                              _LegendItem(
+                                color: moneyInColor,
+                                label: "Money In",
+                                swatch: _LegendSwatch.solidSquare,
+                              ),
+                            if (_showMoneyOut)
+                              _LegendItem(
+                                color: moneyOutColor,
+                                label: "Money Out",
+                                swatch: _LegendSwatch.solidSquare,
+                              ),
+                            if (_showNetCash)
+                              _LegendItem(
+                                color: netCashColor,
+                                label: "Net Cash",
+                                swatch: _LegendSwatch.lineSolid,
+                                subtitle: controller.isRealizedView.value
+                                    ? "Paid transactions only"
+                                    : "Same yellow line; totals include unpaid",
+                              ),
+                            if (_comparePriorPeriod)
+                              _LegendItem(
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
+                                label: "Prior net",
+                                swatch: _LegendSwatch.lineDashedPrior,
+                                subtitle: "Grey long-dash · prior month",
+                              ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 48),
+                ),
+                const SizedBox(height: 48),
 
-                  // 🔹 Bottom Section: Cash Flow Statement Container (match trend chart surface)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(isDark ? 0.15 : 0.03),
-                          blurRadius: 40,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+                // 🔹 Bottom Section: Cash Flow Statement Container (match trend chart surface)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.black12,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(24.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              AppText("Cash Flow Statement", fontSize: 22, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87),
-                              const SizedBox(height: 24),
-                              
-                              LayoutBuilder(builder: (context, constraints) {
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.15 : 0.03,
+                        ),
+                        blurRadius: 40,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AppText(
+                              "Cash Flow Statement",
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                            const SizedBox(height: 24),
+
+                            LayoutBuilder(
+                              builder: (context, constraints) {
                                 final isWide = constraints.maxWidth > 950;
                                 final opItems = _getOperatingItems(controller);
-                                final investItems = _getInvestingItems(controller);
-                                final financeItems = _getFinancingItems(controller);
+                                final investItems = _getInvestingItems(
+                                  controller,
+                                );
+                                final financeItems = _getFinancingItems(
+                                  controller,
+                                );
 
-                                final statementCardFill = Theme.of(context).colorScheme.surface;
+                                final statementCardFill = Theme.of(
+                                  context,
+                                ).colorScheme.surface;
                                 if (isWide) {
                                   return IntrinsicHeight(
                                     child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
                                       children: [
-                                        Expanded(child: _buildStatementCard("Operating Activities", opItems, adjustedOperatingCash, const Color(0xFF19C37D), statementCardFill, textPrimary, textSecondary, equalHeightWithNeighbors: true)),
+                                        Expanded(
+                                          child: _buildStatementCard(
+                                            "Operating Activities",
+                                            opItems,
+                                            adjustedOperatingCash,
+                                            const Color(0xFF19C37D),
+                                            statementCardFill,
+                                            textPrimary,
+                                            textSecondary,
+                                            equalHeightWithNeighbors: true,
+                                          ),
+                                        ),
                                         const SizedBox(width: 16),
-                                        Expanded(child: _buildStatementCard("Investing Activities", investItems, controller.investingCashFlow.value, const Color(0xFF2B7FFF), statementCardFill, textPrimary, textSecondary, equalHeightWithNeighbors: true)),
+                                        Expanded(
+                                          child: _buildStatementCard(
+                                            "Investing Activities",
+                                            investItems,
+                                            controller.investingCashFlow.value,
+                                            const Color(0xFF2B7FFF),
+                                            statementCardFill,
+                                            textPrimary,
+                                            textSecondary,
+                                            equalHeightWithNeighbors: true,
+                                          ),
+                                        ),
                                         const SizedBox(width: 16),
-                                        Expanded(child: _buildStatementCard("Financing Activities", financeItems, controller.financingCashFlow.value, const Color(0xFFF2C94C), statementCardFill, textPrimary, textSecondary, equalHeightWithNeighbors: true)),
+                                        Expanded(
+                                          child: _buildStatementCard(
+                                            "Financing Activities",
+                                            financeItems,
+                                            controller.financingCashFlow.value,
+                                            const Color(0xFFF2C94C),
+                                            statementCardFill,
+                                            textPrimary,
+                                            textSecondary,
+                                            equalHeightWithNeighbors: true,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   );
                                 } else {
                                   return Column(
                                     children: [
-                                      _buildStatementCard("Operating Activities", opItems, adjustedOperatingCash, const Color(0xFF19C37D), statementCardFill, textPrimary, textSecondary, equalHeightWithNeighbors: false),
+                                      _buildStatementCard(
+                                        "Operating Activities",
+                                        opItems,
+                                        adjustedOperatingCash,
+                                        const Color(0xFF19C37D),
+                                        statementCardFill,
+                                        textPrimary,
+                                        textSecondary,
+                                        equalHeightWithNeighbors: false,
+                                      ),
                                       const SizedBox(height: 16),
-                                      _buildStatementCard("Investing Activities", investItems, controller.investingCashFlow.value, const Color(0xFF2B7FFF), statementCardFill, textPrimary, textSecondary, equalHeightWithNeighbors: false),
+                                      _buildStatementCard(
+                                        "Investing Activities",
+                                        investItems,
+                                        controller.investingCashFlow.value,
+                                        const Color(0xFF2B7FFF),
+                                        statementCardFill,
+                                        textPrimary,
+                                        textSecondary,
+                                        equalHeightWithNeighbors: false,
+                                      ),
                                       const SizedBox(height: 16),
-                                      _buildStatementCard("Financing Activities", financeItems, controller.financingCashFlow.value, const Color(0xFFF2C94C), statementCardFill, textPrimary, textSecondary, equalHeightWithNeighbors: false),
+                                      _buildStatementCard(
+                                        "Financing Activities",
+                                        financeItems,
+                                        controller.financingCashFlow.value,
+                                        const Color(0xFFF2C94C),
+                                        statementCardFill,
+                                        textPrimary,
+                                        textSecondary,
+                                        equalHeightWithNeighbors: false,
+                                      ),
                                     ],
                                   );
                                 }
-                              }),
-                            ],
-                          ),
+                              },
+                            ),
+                          ],
                         ),
-                        
-                        // 3️⃣ Shared Footer: Net Change in Cash
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-                          decoration: BoxDecoration(
-                            color: isDark ? Colors.white.withOpacity(0.02) : Colors.black.withOpacity(0.02),
-                            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-                            border: Border(top: BorderSide(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05))),
+                      ),
+
+                      // 3️⃣ Shared Footer: Net Change in Cash
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 24,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.02)
+                              : Colors.black.withValues(alpha: 0.02),
+                          borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(24),
                           ),
-                          child: Center(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                AppText(
-                                  "Net Cash: ",
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                                AppText(
-                                  _formatCurrencyExact(statementNetCash),
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                  color: statementNetCash < 0 ? const Color(0xFFE57373) : const Color(0xFF19C37D),
-                                ),
-                              ],
+                          border: Border(
+                            top: BorderSide(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.05)
+                                  : Colors.black.withValues(alpha: 0.05),
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AppText(
+                                "Net Cash: ",
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                              AppText(
+                                _formatCurrencyExact(statementNetCash),
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: statementNetCash < 0
+                                    ? const Color(0xFFE57373)
+                                    : const Color(0xFF19C37D),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const RecentDocumentsWidget(
-                    type: 'cf',
-                    showViewAllAction: false,
-                    showDeleteAction: true,
-                  ),
-                  const SizedBox(height: 80),
-                ],
-              ),
+                ),
+                const RecentDocumentsWidget(
+                  type: 'cf',
+                  showViewAllAction: false,
+                  showDeleteAction: true,
+                ),
+                const SizedBox(height: 80),
+              ],
             ),
-          );
-        });
+          ),
+        );
+      },
+    );
   }
 
   Widget _premiumKPICard({
@@ -2317,10 +2933,12 @@ class _CashFlowTabState extends State<CashFlowTab>
     final Color changeColor = isFlat
         ? (isDark ? Colors.white54 : Colors.black45)
         : (isGoodTrend ? cashGreen : softRed);
-    final IconData changeIcon = isPositive ? Icons.arrow_upward : Icons.arrow_downward;
-    
+    final IconData changeIcon = isPositive
+        ? Icons.arrow_upward
+        : Icons.arrow_downward;
+
     final bool isNegativeValue = value.contains('(');
-    
+
     // Explicit value color rules as per reqs
     Color displayValueColor = valueColor ?? Colors.white;
     if (isNetCash) {
@@ -2333,10 +2951,17 @@ class _CashFlowTabState extends State<CashFlowTab>
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black).withOpacity(0.05), width: 0.5),
+        border: Border.all(
+          color:
+              (Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : Colors.black)
+                  .withValues(alpha: 0.05),
+          width: 0.5,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.1 : 0.03),
+            color: Colors.black.withValues(alpha: isDark ? 0.1 : 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -2372,11 +2997,14 @@ class _CashFlowTabState extends State<CashFlowTab>
                 runSpacing: 4,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: comparisonUnavailable
-                          ? Colors.grey.withOpacity(0.15)
-                          : changeColor.withOpacity(0.15),
+                          ? Colors.grey.withValues(alpha: 0.15)
+                          : changeColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Row(
@@ -2501,7 +3129,8 @@ class _CashFlowTabState extends State<CashFlowTab>
     final notesCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
     DateTime selectedDate =
-        _endDate ?? DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+        _endDate ??
+        DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
     CashFlowManualSection selectedSection = CashFlowManualSection.operating;
     bool isNonCash = false;
     String suggestionMessage = '';
@@ -2549,7 +3178,8 @@ class _CashFlowTabState extends State<CashFlowTab>
                   '${categoryCtrl.text} ${notesCtrl.text} ${amountCtrl.text}';
               if (combined.trim().isEmpty) {
                 setDialogState(() {
-                  suggestionMessage = 'BookSmart AI needs category/notes before suggesting a section.';
+                  suggestionMessage =
+                      'BookSmart AI needs category/notes before suggesting a section.';
                   suggestionIsError = true;
                 });
                 return;
@@ -2557,10 +3187,11 @@ class _CashFlowTabState extends State<CashFlowTab>
               final suggested = _manualEntryService.suggestSection(combined);
               final amount = double.tryParse(amountCtrl.text.trim()) ?? 0;
               final period = _formatManualPeriod(selectedDate);
-              final reason = (notesCtrl.text.trim().isNotEmpty
-                      ? notesCtrl.text.trim()
-                      : categoryCtrl.text.trim())
-                  .toLowerCase();
+              final reason =
+                  (notesCtrl.text.trim().isNotEmpty
+                          ? notesCtrl.text.trim()
+                          : categoryCtrl.text.trim())
+                      .toLowerCase();
               final why = reason.isEmpty
                   ? 'based on your entry metadata'
                   : 'because "${reason.length > 70 ? '${reason.substring(0, 70)}...' : reason}" matches cash-flow rules';
@@ -2583,14 +3214,16 @@ class _CashFlowTabState extends State<CashFlowTab>
                 final amount = double.tryParse(amountCtrl.text.trim());
                 if (_startDate == null || _endDate == null) {
                   setDialogState(() {
-                    suggestionMessage = 'This adjustment cannot save because no date range was selected.';
+                    suggestionMessage =
+                        'This adjustment cannot save because no date range was selected.';
                     suggestionIsError = true;
                   });
                   return;
                 }
                 if (categoryCtrl.text.trim().isEmpty || amount == null) {
                   setDialogState(() {
-                    suggestionMessage = 'This adjustment cannot save because category and a valid amount are required.';
+                    suggestionMessage =
+                        'This adjustment cannot save because category and a valid amount are required.';
                     suggestionIsError = true;
                   });
                   return;
@@ -2614,8 +3247,9 @@ class _CashFlowTabState extends State<CashFlowTab>
                   endDate: _endDate,
                 );
                 if (mounted) Navigator.of(context).pop();
-                final targetSection =
-                    _manualSectionStatementLabel(selectedSection);
+                final targetSection = _manualSectionStatementLabel(
+                  selectedSection,
+                );
                 final monthLabel = DateFormat('MMMM yyyy').format(selectedDate);
                 showSnackBar(
                   'Your cash flow adjustment was saved to $targetSection for $monthLabel.',
@@ -2644,10 +3278,15 @@ class _CashFlowTabState extends State<CashFlowTab>
 
             return AlertDialog(
               backgroundColor: const Color(0xFF0A192F),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               title: const Text(
                 'Adjust Cash Flow',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               content: SizedBox(
                 width: 420,
@@ -2690,7 +3329,9 @@ class _CashFlowTabState extends State<CashFlowTab>
                       TextField(
                         controller: categoryCtrl,
                         style: const TextStyle(color: Colors.white),
-                        decoration: inputDecoration('Category / Adjustment Name'),
+                        decoration: inputDecoration(
+                          'Category / Adjustment Name',
+                        ),
                       ),
                       const SizedBox(height: 12),
                       TextField(
@@ -2740,7 +3381,9 @@ class _CashFlowTabState extends State<CashFlowTab>
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.white,
                             side: BorderSide(
-                              color: const Color(0xFF2B7FFF).withValues(alpha: 0.7),
+                              color: const Color(
+                                0xFF2B7FFF,
+                              ).withValues(alpha: 0.7),
                             ),
                             backgroundColor: const Color(0x0D2B7FFF),
                             overlayColor: const Color(0x332B7FFF),
@@ -2759,16 +3402,17 @@ class _CashFlowTabState extends State<CashFlowTab>
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
                             suggestionMessage,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFFE57373),
-                              fontWeight: FontWeight.w600,
-                            ).copyWith(
-                              color: suggestionIsError
-                                  ? const Color(0xFFE57373)
-                                  : const Color(0xFF19C37D),
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style:
+                                const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFFE57373),
+                                  fontWeight: FontWeight.w600,
+                                ).copyWith(
+                                  color: suggestionIsError
+                                      ? const Color(0xFFE57373)
+                                      : const Color(0xFF19C37D),
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                         ),
                     ],
@@ -2784,7 +3428,10 @@ class _CashFlowTabState extends State<CashFlowTab>
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('Close', style: TextStyle(fontFamily: 'Outfit')),
+                  child: const Text(
+                    'Close',
+                    style: TextStyle(fontFamily: 'Outfit'),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: save,
@@ -2795,7 +3442,10 @@ class _CashFlowTabState extends State<CashFlowTab>
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('Save', style: TextStyle(fontFamily: 'Outfit')),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(fontFamily: 'Outfit'),
+                  ),
                 ),
               ],
             );
@@ -2804,7 +3454,6 @@ class _CashFlowTabState extends State<CashFlowTab>
       },
     );
   }
-
 
   Widget _buildCashFlowMetricToggles(bool isDark) {
     return PopupMenuButton<String>(
@@ -2841,7 +3490,9 @@ class _CashFlowTabState extends State<CashFlowTab>
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
-          color: isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.02),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.04)
+              : Colors.black.withValues(alpha: 0.02),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -2911,7 +3562,11 @@ class _CashFlowTabState extends State<CashFlowTab>
   }
 
   /// Same as fl_chart [BarChartAlignment.spaceAround] group centers (uniform group width).
-  List<double> _cfBarGroupCenterXsSpaceAround(double viewWidth, int n, double groupWidth) {
+  List<double> _cfBarGroupCenterXsSpaceAround(
+    double viewWidth,
+    int n,
+    double groupWidth,
+  ) {
     if (n <= 0) return [];
     final sumWidth = groupWidth * n;
     final spaceAvailable = viewWidth - sumWidth;
@@ -2949,40 +3604,41 @@ class _CashFlowTabState extends State<CashFlowTab>
     return LayoutBuilder(
       builder: (context, constraints) {
         final includeUnrealized = !controller.isRealizedView.value;
-        final effectiveSeries = series
-            .map((row) {
-              final realizedIncome =
-                  (row['realizedIncome'] as num?)?.toDouble() ??
-                      (row['income'] as num?)?.toDouble() ??
-                      0.0;
-              final realizedExpense =
-                  (row['realizedExpense'] as num?)?.toDouble() ??
-                      (row['expense'] as num?)?.toDouble() ??
-                      0.0;
-              final unrealizedIncome =
-                  (row['unrealizedIncome'] as num?)?.toDouble() ?? 0.0;
-              final unrealizedExpense =
-                  (row['unrealizedExpense'] as num?)?.toDouble() ?? 0.0;
-              final income = includeUnrealized
-                  ? realizedIncome + unrealizedIncome
-                  : realizedIncome;
-              final expense = includeUnrealized
-                  ? realizedExpense + unrealizedExpense
-                  : realizedExpense;
-              final net = income - expense;
-              return {
-                ...row,
-                'income': income,
-                'expense': expense,
-                'net': net,
-                'realizedIncome': realizedIncome,
-                'realizedExpense': realizedExpense,
-                'realizedNet': realizedIncome - realizedExpense,
-              };
-            })
-            .toList();
+        final effectiveSeries = series.map((row) {
+          final realizedIncome =
+              (row['realizedIncome'] as num?)?.toDouble() ??
+              (row['income'] as num?)?.toDouble() ??
+              0.0;
+          final realizedExpense =
+              (row['realizedExpense'] as num?)?.toDouble() ??
+              (row['expense'] as num?)?.toDouble() ??
+              0.0;
+          final unrealizedIncome =
+              (row['unrealizedIncome'] as num?)?.toDouble() ?? 0.0;
+          final unrealizedExpense =
+              (row['unrealizedExpense'] as num?)?.toDouble() ?? 0.0;
+          final income = includeUnrealized
+              ? realizedIncome + unrealizedIncome
+              : realizedIncome;
+          final expense = includeUnrealized
+              ? realizedExpense + unrealizedExpense
+              : realizedExpense;
+          final net = income - expense;
+          return {
+            ...row,
+            'income': income,
+            'expense': expense,
+            'net': net,
+            'realizedIncome': realizedIncome,
+            'realizedExpense': realizedExpense,
+            'realizedNet': realizedIncome - realizedExpense,
+          };
+        }).toList();
         const leftAxis = 50.0;
-        final usableW = (constraints.maxWidth - leftAxis).clamp(1.0, double.infinity);
+        final usableW = (constraints.maxWidth - leftAxis).clamp(
+          1.0,
+          double.infinity,
+        );
         final n = effectiveSeries.length;
         final prev = controller.prevTrendChartSeries;
         final rawY = _cfTrendChartRawYBounds(effectiveSeries, prev, n);
@@ -3005,7 +3661,8 @@ class _CashFlowTabState extends State<CashFlowTab>
             LineChartBarData(
               spots: List.generate(n, (i) {
                 final net = (series[i]['net'] as num?)?.toDouble() ?? 0;
-                final projectedNet = (effectiveSeries[i]['net'] as num?)?.toDouble() ?? 0;
+                final projectedNet =
+                    (effectiveSeries[i]['net'] as num?)?.toDouble() ?? 0;
                 final xn = i < spotXN.length ? spotXN[i] : 0.5;
                 return FlSpot(xn, includeUnrealized ? projectedNet : net);
               }),
@@ -3040,7 +3697,9 @@ class _CashFlowTabState extends State<CashFlowTab>
           );
         }
         if (_comparePriorPeriod && compareLen > 0) {
-          final priorColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+          final priorColor = isDark
+              ? const Color(0xFF94A3B8)
+              : const Color(0xFF64748B);
           lineBars.add(
             LineChartBarData(
               spots: List.generate(compareLen, (i) {
@@ -3068,241 +3727,314 @@ class _CashFlowTabState extends State<CashFlowTab>
             fit: StackFit.expand,
             children: [
               BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: maxY,
-                minY: minY,
-                baselineY: 0,
-                barTouchData: const BarTouchData(enabled: false),
-                titlesData: FlTitlesData(
-                  show: true,
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (v, meta) {
-                        final idx = v.toInt();
-                        if (idx < 0 || idx >= n) return const SizedBox.shrink();
-                        return SideTitleWidget(
-                          meta: meta,
-                          angle: 0,
-                          space: compactXAxis ? 6.0 : 10.0,
-                          child: SizedBox(
-                            width: compactXAxis ? 38 : 52,
-                            child: Transform.rotate(
-                              angle: 0,
-                              child: Text(
-                                effectiveSeries[idx]['label']?.toString() ?? '',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: compactXAxis ? 8 : 10,
-                                  color: isDark ? Colors.white54 : Colors.black54,
-                                  fontWeight: FontWeight.w500,
-                                  fontStyle: FontStyle.normal,
-                                  fontFamily: 'Roboto',
-                                  height: 1.0,
+                BarChartData(
+                  alignment: BarChartAlignment.spaceAround,
+                  maxY: maxY,
+                  minY: minY,
+                  baselineY: 0,
+                  barTouchData: const BarTouchData(enabled: false),
+                  titlesData: FlTitlesData(
+                    show: true,
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (v, meta) {
+                          final idx = v.toInt();
+                          if (idx < 0 || idx >= n)
+                            return const SizedBox.shrink();
+                          return SideTitleWidget(
+                            meta: meta,
+                            angle: 0,
+                            space: compactXAxis ? 6.0 : 10.0,
+                            child: SizedBox(
+                              width: compactXAxis ? 38 : 52,
+                              child: Transform.rotate(
+                                angle: 0,
+                                child: Text(
+                                  effectiveSeries[idx]['label']?.toString() ??
+                                      '',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: compactXAxis ? 8 : 10,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.black54,
+                                    fontWeight: FontWeight.w500,
+                                    fontStyle: FontStyle.normal,
+                                    fontFamily: 'Roboto',
+                                    height: 1.0,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                      reservedSize: bottomReserved,
-                      interval: 1,
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 50,
-                      interval: step,
-                      getTitlesWidget: (v, meta) {
-                        if ((v - meta.max).abs() < 0.01) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: AppText(
-                            _formatCompact(v),
-                            fontSize: 10,
-                            color: isDark ? Colors.white54 : Colors.black54,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  getDrawingHorizontalLine: (v) => FlLine(
-                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
-                    strokeWidth: 1,
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                barGroups: List.generate(n, (i) {
-                  final data = effectiveSeries[i];
-                  final inc = (data['income'] as num?)?.toDouble() ?? 0;
-                  final exp = (data['expense'] as num?)?.toDouble() ?? 0;
-                  final realizedInc = (data['realizedIncome'] as num?)?.toDouble() ?? inc;
-                  final realizedExp = (data['realizedExpense'] as num?)?.toDouble() ?? exp;
-                  final rods = <BarChartRodData>[];
-                  if (_showMoneyIn) {
-                    rods.add(
-                      BarChartRodData(
-                        toY: includeUnrealized ? realizedInc : inc,
-                        color: inColor,
-                        width: (320 / n).clamp(4.0, 16.0),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [
-                            inColor.withOpacity(0.4),
-                            inColor,
-                          ],
-                        ),
+                          );
+                        },
+                        reservedSize: bottomReserved,
+                        interval: 1,
                       ),
-                    );
-                    if (includeUnrealized && inc > realizedInc) {
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 50,
+                        interval: step,
+                        getTitlesWidget: (v, meta) {
+                          if ((v - meta.max).abs() < 0.01)
+                            return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: AppText(
+                              _formatCompact(v),
+                              fontSize: 10,
+                              color: isDark ? Colors.white54 : Colors.black54,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                  ),
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    getDrawingHorizontalLine: (v) => FlLine(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.black.withValues(alpha: 0.05),
+                      strokeWidth: 1,
+                    ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  barGroups: List.generate(n, (i) {
+                    final data = effectiveSeries[i];
+                    final inc = (data['income'] as num?)?.toDouble() ?? 0;
+                    final exp = (data['expense'] as num?)?.toDouble() ?? 0;
+                    final realizedInc =
+                        (data['realizedIncome'] as num?)?.toDouble() ?? inc;
+                    final realizedExp =
+                        (data['realizedExpense'] as num?)?.toDouble() ?? exp;
+                    final rods = <BarChartRodData>[];
+                    if (_showMoneyIn) {
                       rods.add(
                         BarChartRodData(
-                          toY: inc,
-                          fromY: realizedInc,
-                          color: inColor.withValues(alpha: 0.35),
+                          toY: includeUnrealized ? realizedInc : inc,
+                          color: inColor,
                           width: (320 / n).clamp(4.0, 16.0),
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(4),
+                          ),
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [inColor.withValues(alpha: 0.4), inColor],
+                          ),
+                        ),
+                      );
+                      if (includeUnrealized && inc > realizedInc) {
+                        rods.add(
+                          BarChartRodData(
+                            toY: inc,
+                            fromY: realizedInc,
+                            color: inColor.withValues(alpha: 0.35),
+                            width: (320 / n).clamp(4.0, 16.0),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4),
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                    if (_showMoneyOut) {
+                      rods.add(
+                        BarChartRodData(
+                          toY: includeUnrealized ? realizedExp : exp,
+                          color: outColor,
+                          width: (320 / n).clamp(4.0, 16.0),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(4),
+                          ),
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [outColor.withValues(alpha: 0.4), outColor],
+                          ),
+                        ),
+                      );
+                      if (includeUnrealized && exp > realizedExp) {
+                        rods.add(
+                          BarChartRodData(
+                            toY: exp,
+                            fromY: realizedExp,
+                            color: outColor.withValues(alpha: 0.35),
+                            width: (320 / n).clamp(4.0, 16.0),
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(4),
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                    if (rods.isEmpty) {
+                      rods.add(
+                        BarChartRodData(
+                          toY: 0.001,
+                          color: Colors.transparent,
+                          width: 1,
                         ),
                       );
                     }
-                  }
-                  if (_showMoneyOut) {
-                    rods.add(
-                      BarChartRodData(
-                        toY: includeUnrealized ? realizedExp : exp,
-                        color: outColor,
-                        width: (320 / n).clamp(4.0, 16.0),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [
-                            outColor.withOpacity(0.4),
-                            outColor,
-                          ],
-                        ),
-                      ),
-                    );
-                    if (includeUnrealized && exp > realizedExp) {
-                      rods.add(
-                        BarChartRodData(
-                          toY: exp,
-                          fromY: realizedExp,
-                          color: outColor.withValues(alpha: 0.35),
-                          width: (320 / n).clamp(4.0, 16.0),
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                        ),
-                      );
-                    }
-                  }
-                  if (rods.isEmpty) {
-                    rods.add(BarChartRodData(toY: 0.001, color: Colors.transparent, width: 1));
-                  }
-                  return BarChartGroupData(x: i, barsSpace: 6, barRods: rods);
-                }),
+                    return BarChartGroupData(x: i, barsSpace: 6, barRods: rods);
+                  }),
+                ),
               ),
-            ),
-            LineChart(
-              LineChartData(
-                minX: 0,
-                maxX: 1,
-                maxY: maxY,
-                minY: minY,
-                baselineY: 0,
-                lineTouchData: LineTouchData(
-                  enabled: tooltipEnabled,
-                  handleBuiltInTouches: tooltipEnabled,
-                  touchSpotThreshold: 18,
-                  distanceCalculator: (touch, spotPixel) => (touch - spotPixel).distance,
-                  getTouchedSpotIndicator: (barData, spotIndexes) {
-                    return spotIndexes
-                        .map(
-                          (_) => TouchedSpotIndicatorData(
-                            FlLine(color: Colors.transparent, strokeWidth: 0),
-                            const FlDotData(show: false),
-                          ),
-                        )
-                        .toList();
-                  },
-                  touchTooltipData: LineTouchTooltipData(
-                    maxContentWidth: 240,
-                    fitInsideHorizontally: true,
-                    fitInsideVertically: true,
-                    getTooltipColor: (_) => isDark ? const Color(0xFF1E293B) : const Color(0xFF0F1E37),
-                    getTooltipItems: (touchedSpots) {
-                      return touchedSpots.map((s) {
-                        if (s.barIndex != 0) return null;
-                        final idx = s.spotIndex;
-                        if (idx < 0 || idx >= effectiveSeries.length) return null;
-                        final row = effectiveSeries[idx];
-                        final dateStr = row['tooltipDate']?.toString() ?? '';
-                        final bucketStart = row['bucketStart'];
-                        final bucketDate = bucketStart is DateTime ? bucketStart : DateTime.tryParse(bucketStart?.toString() ?? '');
-                        final hasSpecificDay = RegExp(r'\b[A-Za-z]{3,9}\s+\d{1,2}\b').hasMatch(dateStr);
-                        final tooltipDateText = dateStr.isNotEmpty
-                            ? (hasSpecificDay || bucketDate == null
-                                ? dateStr
-                                : DateFormat('MMMM dd, yyyy').format(bucketDate))
-                            : (bucketDate != null ? DateFormat('MMM dd, yyyy').format(bucketDate) : '');
-                        final inc = (row['income'] as num?)?.toDouble() ?? 0;
-                        final exp = (row['expense'] as num?)?.toDouble() ?? 0;
-                        final net = (row['net'] as num?)?.toDouble() ?? 0;
-                        return LineTooltipItem(
-                          '',
-                          const TextStyle(color: Colors.white, fontSize: 12),
-                          children: [
-                            TextSpan(
-                              text: '$tooltipDateText\n',
-                              style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w700, fontSize: 12, height: 1.35),
+              LineChart(
+                LineChartData(
+                  minX: 0,
+                  maxX: 1,
+                  maxY: maxY,
+                  minY: minY,
+                  baselineY: 0,
+                  lineTouchData: LineTouchData(
+                    enabled: tooltipEnabled,
+                    handleBuiltInTouches: tooltipEnabled,
+                    touchSpotThreshold: 18,
+                    distanceCalculator: (touch, spotPixel) =>
+                        (touch - spotPixel).distance,
+                    getTouchedSpotIndicator: (barData, spotIndexes) {
+                      return spotIndexes
+                          .map(
+                            (_) => TouchedSpotIndicatorData(
+                              FlLine(color: Colors.transparent, strokeWidth: 0),
+                              const FlDotData(show: false),
                             ),
-                            TextSpan(
-                              text: 'Money In: ${_formatCurrencyExact(inc)}\n',
-                              style: TextStyle(color: inColor, fontWeight: FontWeight.w800, fontSize: 12, height: 1.35),
-                            ),
-                            TextSpan(
-                              text: 'Money Out: ${_formatCurrencyExact(exp)}\n',
-                              style: TextStyle(color: outColor, fontWeight: FontWeight.w800, fontSize: 12, height: 1.35),
-                            ),
-                            TextSpan(
-                              text: 'Net Cash: ${_formatCurrencyExact(net)}',
-                              style: TextStyle(color: netColor, fontWeight: FontWeight.w900, fontSize: 12),
-                            ),
-                          ],
-                        );
-                      }).toList();
+                          )
+                          .toList();
                     },
+                    touchTooltipData: LineTouchTooltipData(
+                      maxContentWidth: 240,
+                      fitInsideHorizontally: true,
+                      fitInsideVertically: true,
+                      getTooltipColor: (_) => isDark
+                          ? const Color(0xFF1E293B)
+                          : const Color(0xFF0F1E37),
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((s) {
+                          if (s.barIndex != 0) return null;
+                          final idx = s.spotIndex;
+                          if (idx < 0 || idx >= effectiveSeries.length)
+                            return null;
+                          final row = effectiveSeries[idx];
+                          final dateStr = row['tooltipDate']?.toString() ?? '';
+                          final bucketStart = row['bucketStart'];
+                          final bucketDate = bucketStart is DateTime
+                              ? bucketStart
+                              : DateTime.tryParse(
+                                  bucketStart?.toString() ?? '',
+                                );
+                          final hasSpecificDay = RegExp(
+                            r'\b[A-Za-z]{3,9}\s+\d{1,2}\b',
+                          ).hasMatch(dateStr);
+                          final tooltipDateText = dateStr.isNotEmpty
+                              ? (hasSpecificDay || bucketDate == null
+                                    ? dateStr
+                                    : DateFormat(
+                                        'MMMM dd, yyyy',
+                                      ).format(bucketDate))
+                              : (bucketDate != null
+                                    ? DateFormat(
+                                        'MMM dd, yyyy',
+                                      ).format(bucketDate)
+                                    : '');
+                          final inc = (row['income'] as num?)?.toDouble() ?? 0;
+                          final exp = (row['expense'] as num?)?.toDouble() ?? 0;
+                          final net = (row['net'] as num?)?.toDouble() ?? 0;
+                          return LineTooltipItem(
+                            '',
+                            const TextStyle(color: Colors.white, fontSize: 12),
+                            children: [
+                              TextSpan(
+                                text: '$tooltipDateText\n',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                  height: 1.35,
+                                ),
+                              ),
+                              TextSpan(
+                                text:
+                                    'Money In: ${_formatCurrencyExact(inc)}\n',
+                                style: TextStyle(
+                                  color: inColor,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
+                                  height: 1.35,
+                                ),
+                              ),
+                              TextSpan(
+                                text:
+                                    'Money Out: ${_formatCurrencyExact(exp)}\n',
+                                style: TextStyle(
+                                  color: outColor,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
+                                  height: 1.35,
+                                ),
+                              ),
+                              TextSpan(
+                                text: 'Net Cash: ${_formatCurrencyExact(net)}',
+                                style: TextStyle(
+                                  color: netColor,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList();
+                      },
+                    ),
                   ),
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 50,
+                        getTitlesWidget: (_, __) => const SizedBox.shrink(),
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: bottomReserved,
+                        getTitlesWidget: (_, __) => const SizedBox.shrink(),
+                      ),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                  ),
+                  gridData: const FlGridData(show: false),
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: lineBars.isEmpty
+                      ? [
+                          LineChartBarData(
+                            spots: const [FlSpot(0, 0)],
+                            dotData: const FlDotData(show: false),
+                          ),
+                        ]
+                      : lineBars,
                 ),
-                titlesData: FlTitlesData(
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(showTitles: true, reservedSize: 50, getTitlesWidget: (_, __) => const SizedBox.shrink()),
-                  ),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(showTitles: true, reservedSize: bottomReserved, getTitlesWidget: (_, __) => const SizedBox.shrink()),
-                  ),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                gridData: const FlGridData(show: false),
-                borderData: FlBorderData(show: false),
-                lineBarsData: lineBars.isEmpty
-                    ? [
-                        LineChartBarData(spots: const [FlSpot(0, 0)], dotData: const FlDotData(show: false)),
-                      ]
-                    : lineBars,
               ),
-            ),
             ],
           ),
         );
@@ -3337,18 +4069,31 @@ class _CashFlowTabState extends State<CashFlowTab>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          AppText(item["label"], fontSize: 13, color: textSecondary, fontWeight: FontWeight.w500),
+                          AppText(
+                            item["label"],
+                            fontSize: 13,
+                            color: textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
                           AppText(
                             _formatCurrencyExact(item["value"]),
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
-                            color: (item["value"] as double) < 0 ? const Color(0xFFE57373) : textPrimary,
+                            color: (item["value"] as double) < 0
+                                ? const Color(0xFFE57373)
+                                : textPrimary,
                           ),
                         ],
                       ),
                     ),
                     if (idx < items.length - 1)
-                      Divider(height: 1, thickness: 0.5, color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                      Divider(
+                        height: 1,
+                        thickness: 0.5,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.05),
+                      ),
                   ],
                 );
               }).toList(),
@@ -3361,13 +4106,15 @@ class _CashFlowTabState extends State<CashFlowTab>
         color: cardColor,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.06),
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.black.withValues(alpha: 0.06),
         ),
         boxShadow: isDark
             ? null
             : [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
+                  color: Colors.black.withValues(alpha: 0.02),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -3398,7 +4145,8 @@ class _CashFlowTabState extends State<CashFlowTab>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   InkWell(
-                    onTap: () => setState(() => _expandedCards[title] = !isExpanded),
+                    onTap: () =>
+                        setState(() => _expandedCards[title] = !isExpanded),
                     child: Container(
                       padding: const EdgeInsets.all(24),
                       child: Row(
@@ -3413,9 +4161,11 @@ class _CashFlowTabState extends State<CashFlowTab>
                             ),
                           ),
                           Icon(
-                            isExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right,
+                            isExpanded
+                                ? Icons.keyboard_arrow_down
+                                : Icons.keyboard_arrow_right,
                             size: 20,
-                            color: textSecondary.withOpacity(0.3),
+                            color: textSecondary.withValues(alpha: 0.3),
                           ),
                         ],
                       ),
@@ -3423,15 +4173,23 @@ class _CashFlowTabState extends State<CashFlowTab>
                   ),
                   if (isExpanded) ...[
                     detailSection,
-                    if (items.length < 3) SizedBox(height: (3 - items.length) * 44.0),
+                    if (items.length < 3)
+                      SizedBox(height: (3 - items.length) * 44.0),
                   ],
                   if (equalHeightWithNeighbors) const Spacer(),
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: accentColor.withValues(alpha: 0.1),
-                      borderRadius: const BorderRadius.only(bottomRight: Radius.circular(24)),
-                      border: Border(top: BorderSide(color: accentColor.withValues(alpha: 0.2), width: 1)),
+                      borderRadius: const BorderRadius.only(
+                        bottomRight: Radius.circular(24),
+                      ),
+                      border: Border(
+                        top: BorderSide(
+                          color: accentColor.withValues(alpha: 0.2),
+                          width: 1,
+                        ),
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -3439,7 +4197,9 @@ class _CashFlowTabState extends State<CashFlowTab>
                         AppText(
                           title == "Operating Activities"
                               ? "Operating Cash Flow"
-                              : (title == "Investing Activities" ? "Investing Cash Flow" : "Financing Cash Flow"),
+                              : (title == "Investing Activities"
+                                    ? "Investing Cash Flow"
+                                    : "Financing Cash Flow"),
                           fontSize: 14,
                           fontWeight: FontWeight.w900,
                           color: textPrimary,
@@ -3448,7 +4208,9 @@ class _CashFlowTabState extends State<CashFlowTab>
                           _formatCurrencyExact(total),
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
-                          color: total >= 0 ? const Color(0xFF19C37D) : const Color(0xFFE57373),
+                          color: total >= 0
+                              ? const Color(0xFF19C37D)
+                              : const Color(0xFFE57373),
                         ),
                       ],
                     ),
@@ -3462,12 +4224,17 @@ class _CashFlowTabState extends State<CashFlowTab>
     );
   }
 
-  List<Map<String, dynamic>> _getOperatingItems(FinancialReportController controller) {
+  List<Map<String, dynamic>> _getOperatingItems(
+    FinancialReportController controller,
+  ) {
     final includeUnrealized = !controller.isRealizedView.value;
     return [
       {"label": "Net Income", "value": controller.netIncome.value},
       {"label": "Adjustments", "value": controller.operatingAdjustments.value},
-      {"label": "Working Capital", "value": controller.workingCapitalChanges.value},
+      {
+        "label": "Working Capital",
+        "value": controller.workingCapitalChanges.value,
+      },
       {"label": "Other Operating", "value": controller.operatingOther.value},
       if (includeUnrealized)
         {
@@ -3482,14 +4249,18 @@ class _CashFlowTabState extends State<CashFlowTab>
     ];
   }
 
-  List<Map<String, dynamic>> _getInvestingItems(FinancialReportController controller) {
+  List<Map<String, dynamic>> _getInvestingItems(
+    FinancialReportController controller,
+  ) {
     return [
       {"label": "Asset Purchases", "value": controller.assetPurchases.value},
       {"label": "Investments", "value": controller.investmentActivities.value},
     ];
   }
 
-  List<Map<String, dynamic>> _getFinancingItems(FinancialReportController controller) {
+  List<Map<String, dynamic>> _getFinancingItems(
+    FinancialReportController controller,
+  ) {
     return [
       {"label": "Loans", "value": controller.loanActivities.value},
       {"label": "Contributions", "value": controller.ownerContributions.value},
@@ -3497,7 +4268,6 @@ class _CashFlowTabState extends State<CashFlowTab>
       {"label": "Other Financing", "value": controller.financingOther.value},
     ];
   }
-
 
   String _formatCurrency(double value) {
     final formatted = NumberFormat("#,##0.00").format(value.abs());
@@ -3511,10 +4281,12 @@ class _CashFlowTabState extends State<CashFlowTab>
     String formatted;
     if (absVal >= 1000000) {
       final m = absVal / 1000000;
-      formatted = "\$${m.truncateToDouble() == m ? m.toStringAsFixed(0) : m.toStringAsFixed(1)}M";
+      formatted =
+          "\$${m.truncateToDouble() == m ? m.toStringAsFixed(0) : m.toStringAsFixed(1)}M";
     } else if (absVal >= 1000) {
       final k = absVal / 1000;
-      formatted = "\$${k.truncateToDouble() == k ? k.toStringAsFixed(0) : k.toStringAsFixed(1)}K";
+      formatted =
+          "\$${k.truncateToDouble() == k ? k.toStringAsFixed(0) : k.toStringAsFixed(1)}K";
     } else {
       formatted = "\$${absVal.toInt()}";
     }
@@ -3531,6 +4303,7 @@ class _CashFlowTabState extends State<CashFlowTab>
 enum _LegendSwatch {
   solidSquare,
   lineSolid,
+
   /// Prior-period overlay: two longer segments (matches chart long-dash pattern).
   lineDashedPrior,
 }
@@ -3539,6 +4312,7 @@ class _LegendItem extends StatelessWidget {
   final Color color;
   final String label;
   final _LegendSwatch swatch;
+
   /// Short hint under the label (e.g. how unrealized relates to the net line).
   final String? subtitle;
 
@@ -3558,17 +4332,32 @@ class _LegendItem extends StatelessWidget {
         return Container(
           width: 8,
           height: 8,
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
         );
       case _LegendSwatch.lineSolid:
-        return Container(width: 16, height: _lineThick, decoration: BoxDecoration(color: color, borderRadius: cap));
+        return Container(
+          width: 16,
+          height: _lineThick,
+          decoration: BoxDecoration(color: color, borderRadius: cap),
+        );
       case _LegendSwatch.lineDashedPrior:
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 8, height: _lineThick, decoration: BoxDecoration(color: color, borderRadius: cap)),
+            Container(
+              width: 8,
+              height: _lineThick,
+              decoration: BoxDecoration(color: color, borderRadius: cap),
+            ),
             const SizedBox(width: 4),
-            Container(width: 8, height: _lineThick, decoration: BoxDecoration(color: color, borderRadius: cap)),
+            Container(
+              width: 8,
+              height: _lineThick,
+              decoration: BoxDecoration(color: color, borderRadius: cap),
+            ),
           ],
         );
     }
@@ -3583,10 +4372,7 @@ class _LegendItem extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 2),
-          child: _swatch(),
-        ),
+        Padding(padding: const EdgeInsets.only(top: 2), child: _swatch()),
         const SizedBox(width: 8),
         Column(
           mainAxisSize: MainAxisSize.min,

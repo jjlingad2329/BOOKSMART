@@ -1,4 +1,5 @@
 import 'package:booksmart/models/user_base_model.dart';
+import 'package:booksmart/modules/admin/controllers/category_controler.dart';
 import 'package:booksmart/modules/common/providers/user_profile_provider.dart';
 import 'package:booksmart/routes/pages.dart';
 import 'package:get/get.dart';
@@ -26,6 +27,7 @@ Future<String> getInitialRoute() async {
   }
 
   Get.put(AuthController(userJson: userData), permanent: true);
+  Get.put(CategoryAdminController(), permanent: true);
 
   if (authPerson?.role == UserRole.user) {
     final List<OrganizationModel> organizations = await getOrganizations(
