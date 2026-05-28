@@ -89,8 +89,8 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
               color: iconBgColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
@@ -107,33 +107,26 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
+                FittedText(
                   title,
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 6),
-                Text(
+                FittedText(
                   value,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 6),
-                Text(
+                FittedText(
                   subtext,
                   style: TextStyle(
                     color: subtextColor ?? Colors.white54,
                     fontSize: 11,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -368,53 +361,53 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 420;
               final chartWidget = Container(
-                height: 280,
-                width: 220,
-                alignment: Alignment.center,
-                child: PieChart(
-                  dataMap: {
-                    for (var e in controller.results)
-                      e.subCategoryName: e.totalAmount,
-                  },
-                  chartType: ChartType.ring,
-                  colorList: controller.results.map((e) => e.color).toList(),
-                  chartRadius: 150,
-                  ringStrokeWidth: 32,
-                  centerWidget: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'Total Deductions',
-                        style: TextStyle(color: Colors.white54, fontSize: 10),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatCurrency(
-                          isFederal
-                              ? controller.totalFederalDeduction
-                              : controller.totalStateDeduction,
+                padding: EdgeInsets.all(20),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: PieChart(
+                    dataMap: {
+                      for (var e in controller.results)
+                        e.subCategoryName: e.totalAmount,
+                    },
+                    chartType: ChartType.ring,
+                    colorList: controller.results.map((e) => e.color).toList(),
+                    chartRadius: 200,
+                    ringStrokeWidth: 50,
+                    centerWidget: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Total Deductions',
+                          style: TextStyle(color: Colors.white54, fontSize: 10),
                         ),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatCurrency(
+                            isFederal
+                                ? controller.totalFederalDeduction
+                                : controller.totalStateDeduction,
+                          ),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  chartValuesOptions: const ChartValuesOptions(
-                    showChartValues: false,
-                    showChartValuesInPercentage: true,
-                    showChartValuesOutside: true,
-                    decimalPlaces: 1,
-                    chartValueStyle: TextStyle(
-                      color: Colors.black,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+                      ],
                     ),
+                    chartValuesOptions: const ChartValuesOptions(
+                      showChartValues: true,
+                      showChartValuesInPercentage: true,
+                      showChartValuesOutside: true,
+                      decimalPlaces: 1,
+                      chartValueStyle: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    legendOptions: const LegendOptions(showLegends: false),
                   ),
-                  legendOptions: const LegendOptions(showLegends: false),
                 ),
               );
 
@@ -434,27 +427,32 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                             shape: BoxShape.circle,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          entry.subCategoryName,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            entry.subCategoryName,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(width: 12),
-                        Text(
-                          _formatCurrency(
-                            isFederal
-                                ? entry.federalDeduction
-                                : entry.stateDeduction,
-                          ),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                        Expanded(
+                          child: FittedText(
+                            _formatCurrency(
+                              isFederal
+                                  ? entry.federalDeduction
+                                  : entry.stateDeduction,
+                            ),
+                            alignment: Alignment.centerRight,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -465,16 +463,11 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
 
               if (isWide) {
                 return Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    chartWidget,
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: legendWidget,
-                      ),
-                    ),
+                    Expanded(flex: 3, child: chartWidget),
+                    const SizedBox(width: 50),
+                    Expanded(flex: 2, child: legendWidget),
                   ],
                 );
               } else {
@@ -499,7 +492,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
               side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Padding(
-              padding: const EdgeInsets.all(20.0),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -561,16 +554,39 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
               value: "${controller.totalTransactions}",
               subtext: "Across all categories",
             ),
+
+            _buildStatCard(
+              icon: LucideIcons.percent,
+              iconColor: const Color(0xFF9E00FF),
+              iconBgColor: const Color(0xFF9E00FF),
+              title: "Deduction Rate",
+              value:
+                  "${((totalDeductions / controller.totalAmount) * 100).toStringAsFixed(2)}%",
+              subtext: "Average deduction rate",
+            ),
           ];
 
-          if (width > 600) {
-            return Column(spacing: 15, children: cards);
-          } else {
-            return Row(
-              spacing: 10,
-              children: cards.map((e) => Expanded(child: e)).toList(),
-            );
-          }
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              const double spacing = 20;
+              const double runSpacing = 20;
+
+              final itemWidth = (constraints.maxWidth - spacing) / 2;
+              final itemHeight = (constraints.maxHeight - runSpacing) / 2;
+
+              return Wrap(
+                spacing: spacing,
+                runSpacing: runSpacing,
+                children: cards.map((e) {
+                  return SizedBox(
+                    width: itemWidth,
+                    height: itemHeight,
+                    child: e,
+                  );
+                }).toList(),
+              );
+            },
+          );
         }
 
         Widget buildSubTable(DeductionResult row) {
@@ -758,7 +774,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                     spacing: 3,
                     children: const [
                       Expanded(
-                        flex: 2,
+                        flex: 3,
                         child: FittedText(
                           'Category',
                           style: TextStyle(
@@ -769,34 +785,9 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                         ),
                       ),
                       Expanded(
-                        flex: 3,
+                        flex: 2,
                         child: FittedText(
                           'Total',
-                          textAlign: TextAlign.end,
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: FittedText(
-                          'Deductions',
-                          textAlign: TextAlign.end,
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: FittedText(
-                          'Deduction Rate',
-                          textAlign: TextAlign.end,
                           style: TextStyle(
                             color: Colors.white54,
                             fontSize: 12,
@@ -807,8 +798,29 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                       Expanded(
                         flex: 2,
                         child: FittedText(
+                          'Deductions',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: FittedText(
+                          'Deduction Rate',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        flex: 1,
+                        child: FittedText(
                           'Transactions',
-                          textAlign: TextAlign.end,
                           style: TextStyle(
                             color: Colors.white54,
                             fontSize: 12,
@@ -820,7 +832,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                         flex: 1,
                         child: FittedText(
                           'Action',
-                          textAlign: TextAlign.end,
+                          alignment: Alignment.centerRight,
                           style: TextStyle(
                             color: Colors.white54,
                             fontSize: 12,
@@ -894,7 +906,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                                   spacing: 3,
                                   children: [
                                     Expanded(
-                                      flex: 2,
+                                      flex: 3,
                                       child: Row(
                                         children: [
                                           Container(
@@ -907,53 +919,22 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                                           ),
                                           const SizedBox(width: 8),
                                           Expanded(
-                                            child: Text(
+                                            child: FittedText(
                                               row.subCategoryName,
                                               style: const TextStyle(
                                                 color: Colors.white,
                                                 fontSize: 13,
                                                 fontWeight: FontWeight.w500,
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
                                     Expanded(
-                                      flex: 3,
-                                      child: Text(
+                                      flex: 2,
+                                      child: FittedText(
                                         _formatCurrency(row.totalAmount),
-                                        textAlign: TextAlign.end,
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(
-                                        _formatCurrency(
-                                          isFederal
-                                              ? row.federalDeduction
-                                              : row.stateDeduction,
-                                        ),
-                                        textAlign: TextAlign.end,
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(
-                                        row.deductionRate == null
-                                            ? "---"
-                                            : "${row.deductionRate}%",
-                                        textAlign: TextAlign.end,
                                         style: const TextStyle(
                                           color: Colors.white70,
                                           fontSize: 13,
@@ -962,9 +943,24 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                                     ),
                                     Expanded(
                                       flex: 2,
-                                      child: Text(
-                                        "${row.transactionCount}",
-                                        textAlign: TextAlign.end,
+                                      child: FittedText(
+                                        _formatCurrency(
+                                          isFederal
+                                              ? row.federalDeduction
+                                              : row.stateDeduction,
+                                        ),
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: FittedText(
+                                        row.deductionRate == null
+                                            ? "---"
+                                            : "${row.deductionRate}%",
                                         style: const TextStyle(
                                           color: Colors.white70,
                                           fontSize: 13,
@@ -973,12 +969,25 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                                     ),
                                     Expanded(
                                       flex: 1,
-                                      child: Icon(
-                                        isExpanded
-                                            ? Icons.keyboard_arrow_up
-                                            : Icons.keyboard_arrow_down,
-                                        color: Colors.white54,
-                                        size: 18,
+                                      child: FittedText(
+                                        "${row.transactionCount}",
+                                        style: const TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 1,
+                                      child: Align(
+                                        alignment: Alignment.centerRight,
+                                        child: Icon(
+                                          isExpanded
+                                              ? Icons.keyboard_arrow_up
+                                              : Icons.keyboard_arrow_down,
+                                          color: Colors.white54,
+                                          size: 18,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -1011,13 +1020,16 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                       _buildHeader(width),
                       const SizedBox(height: 24),
                       if (isLargeScreen)
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(flex: 6, child: buildPieChartCard()),
-                            const SizedBox(width: 20),
-                            Expanded(flex: 5, child: buildStatsGrid(width)),
-                          ],
+                        SizedBox(
+                          height: 350,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 6, child: buildPieChartCard()),
+                              const SizedBox(width: 20),
+                              Expanded(flex: 5, child: buildStatsGrid(width)),
+                            ],
+                          ),
                         )
                       else
                         Column(
@@ -1025,7 +1037,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                           children: [
                             buildPieChartCard(),
                             const SizedBox(height: 20),
-                            buildStatsGrid(width),
+                            SizedBox(height: 250, child: buildStatsGrid(width)),
                           ],
                         ),
                       const SizedBox(height: 32),
