@@ -1,3 +1,5 @@
+import 'package:booksmart/helpers/json_helper.dart';
+
 class OrganizationModel {
   final int id;
   final String name;
@@ -40,6 +42,11 @@ class OrganizationModel {
   final String? taxGoal;
   final List<String>? retirementCurrent;
   final String? auditAppetite;
+  final double? totalHouseAreaSqft;
+  final double? dedicatedOfficeAreaSqft;
+  final int? businessVehiclePercent;
+  final int? businessUtilityPercent;
+  final int? businessMealPercent;
 
   OrganizationModel({
     required this.id,
@@ -79,6 +86,11 @@ class OrganizationModel {
     this.taxGoal,
     this.retirementCurrent,
     this.auditAppetite,
+    this.totalHouseAreaSqft,
+    this.dedicatedOfficeAreaSqft,
+    this.businessVehiclePercent,
+    this.businessUtilityPercent,
+    this.businessMealPercent,
   });
 
   factory OrganizationModel.fromJson(Map<String, dynamic> json) {
@@ -122,6 +134,17 @@ class OrganizationModel {
       taxGoal: json['tax_goal'],
       retirementCurrent: _parseList(json['retirement_current']),
       auditAppetite: json['audit_appetite'],
+      totalHouseAreaSqft: handleResponseFromJson<double?>(
+        json,
+        'total_house_area_sqft',
+      ),
+      dedicatedOfficeAreaSqft: handleResponseFromJson<double?>(
+        json,
+        'dedicated_office_area_sqft',
+      ),
+      businessVehiclePercent: json['business_vehicle_percent'],
+      businessUtilityPercent: json['business_utility_percent'],
+      businessMealPercent: json['business_meal_percent'],
     );
   }
 
@@ -164,6 +187,11 @@ class OrganizationModel {
       'tax_goal': taxGoal,
       'retirement_current': retirementCurrent,
       'audit_appetite': auditAppetite,
+      'total_house_area_sqft': totalHouseAreaSqft,
+      'dedicated_office_area_sqft': dedicatedOfficeAreaSqft,
+      'business_vehicle_percent': businessVehiclePercent,
+      'business_utility_percent': businessUtilityPercent,
+      'business_meal_percent': businessMealPercent,
     };
   }
 
@@ -204,6 +232,11 @@ class OrganizationModel {
       'tax_goal': taxGoal,
       'retirement_current': retirementCurrent,
       'audit_appetite': auditAppetite,
+      'total_house_area_sqft': totalHouseAreaSqft,
+      'dedicated_office_area_sqft': dedicatedOfficeAreaSqft,
+      'business_vehicle_percent': businessVehiclePercent,
+      'business_utility_percent': businessUtilityPercent,
+      'business_meal_percent': businessMealPercent,
     };
   }
 }

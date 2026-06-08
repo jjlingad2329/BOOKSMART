@@ -20,7 +20,7 @@ class TaxProgressBar extends StatelessWidget {
             Icon(Icons.flag_rounded, size: 16, color: colorScheme.primary),
             const SizedBox(width: 6),
             AppText(
-              'Step $current of 8',
+              'Step $current of 9',
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: colorScheme.primary,
@@ -31,7 +31,7 @@ class TaxProgressBar extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
-            value: current / 8,
+            value: current / 9,
             minHeight: 6,
             backgroundColor: colorScheme.surfaceContainerHighest,
             color: colorScheme.primary,
@@ -62,9 +62,7 @@ class TaxSectionTitle extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.primary.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,8 +147,9 @@ class TaxToggleChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         decoration: BoxDecoration(
-          color:
-              isSelected ? color.withValues(alpha: 0.15) : Colors.transparent,
+          color: isSelected
+              ? color.withValues(alpha: 0.15)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected ? color : Colors.grey.withValues(alpha: 0.4),

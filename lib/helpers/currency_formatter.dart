@@ -6,7 +6,7 @@ class CurrencyUtils {
 
   /// Format double → $1,234.56
   /// If 0 → just "$"
-  static String format(double amount) {
+  static String format(num amount) {
     if (amount == 0) return '\$';
     return '\$${_formatter.format(amount)}';
   }

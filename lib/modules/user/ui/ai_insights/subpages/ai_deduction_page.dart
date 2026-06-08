@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/helpers/currency_formatter.dart';
 import 'package:booksmart/modules/admin/controllers/category_controler.dart';
+import 'package:booksmart/modules/user/ui/transaction/add_transaction_manual.dart';
 import 'package:get/get.dart';
 import 'package:jiffy/jiffy.dart';
 import 'package:pie_chart/pie_chart.dart';
@@ -66,8 +67,6 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
     final end = _activeRange.end;
     return "${Jiffy.parseFromDateTime(start).yMMMd} - ${Jiffy.parseFromDateTime(end).yMMMd}";
   }
-
-  String _formatCurrency(double n) => CurrencyUtils.format(n);
 
   Widget _buildStatCard({
     required IconData icon,
@@ -383,7 +382,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _formatCurrency(
+                          CurrencyUtils.format(
                             isFederal
                                 ? controller.totalFederalDeduction
                                 : controller.totalStateDeduction,
@@ -402,9 +401,11 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                       showChartValuesOutside: true,
                       decimalPlaces: 1,
                       chartValueStyle: TextStyle(
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: FontWeight.bold,
+                        // color: Colors.white,
                       ),
+                      // showChartValueBackground: false,
                     ),
                     legendOptions: const LegendOptions(showLegends: false),
                   ),
@@ -442,10 +443,10 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: FittedText(
-                            _formatCurrency(
+                            CurrencyUtils.format(
                               isFederal
-                                  ? entry.federalDeduction
-                                  : entry.stateDeduction,
+                                  ? entry.federalDeduction.toInt()
+                                  : entry.stateDeduction.toInt(),
                             ),
                             alignment: Alignment.centerRight,
                             style: const TextStyle(
@@ -528,7 +529,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
               iconColor: const Color(0xFF2B7FFF),
               iconBgColor: const Color(0xFF2B7FFF),
               title: "Total Amount",
-              value: _formatCurrency(controller.totalAmount),
+              value: CurrencyUtils.format(controller.totalAmount),
               subtext: "100% of transactions",
             ),
             _buildStatCard(
@@ -536,7 +537,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
               iconColor: const Color(0xFF34C759),
               iconBgColor: const Color(0xFF34C759),
               title: "Total Deductions",
-              value: _formatCurrency(
+              value: CurrencyUtils.format(
                 isFederal
                     ? controller.totalFederalDeduction
                     : controller.totalStateDeduction,
@@ -668,65 +669,73 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                               ),
                             ),
                           ),
+
+                          Expanded(flex: 1, child: Text("Action")),
                         ],
                       ),
                     ),
                     const Divider(color: Colors.white12, height: 1),
 
                     ...transactionController.transactions.map((tx) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10.0),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                Jiffy.parseFromDateTime(tx.dateTime).yMMMd,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
+                      return InkWell(
+                        onTap: () {
+                          goToAddTransactionScreen(transaction: tx);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 10.0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  Jiffy.parseFromDateTime(tx.dateTime).yMMMd,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
-                            ),
-                            Expanded(
-                              flex: 4,
-                              child: Text(
-                                tx.description.isNotEmpty
-                                    ? tx.description
-                                    : tx.title,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Text(
-                                tx.title,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                _formatCurrency(tx.amount),
-                                textAlign: TextAlign.end,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
+                              Expanded(
+                                flex: 4,
+                                child: Text(
+                                  tx.description.isNotEmpty
+                                      ? tx.description
+                                      : tx.title,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                            ),
-                          ],
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  tx.title,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Text(
+                                  CurrencyUtils.format(tx.amount),
+                                  textAlign: TextAlign.end,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              Expanded(child: Icon(Icons.remove_red_eye)),
+                            ],
+                          ),
                         ),
                       );
                     }),
@@ -934,7 +943,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                                     Expanded(
                                       flex: 2,
                                       child: FittedText(
-                                        _formatCurrency(row.totalAmount),
+                                        CurrencyUtils.format(row.totalAmount),
                                         style: const TextStyle(
                                           color: Colors.white70,
                                           fontSize: 13,
@@ -944,7 +953,7 @@ class _AIDeductionPageState extends State<AIDeductionPage> {
                                     Expanded(
                                       flex: 2,
                                       child: FittedText(
-                                        _formatCurrency(
+                                        CurrencyUtils.format(
                                           isFederal
                                               ? row.federalDeduction
                                               : row.stateDeduction,
