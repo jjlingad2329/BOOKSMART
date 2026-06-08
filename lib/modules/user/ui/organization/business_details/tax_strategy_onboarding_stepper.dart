@@ -25,7 +25,7 @@ void goToTaxStrategyOnboarding({
     customDialog(
       child: TaxStrategyOnboardingStepper(organizationId: organizationId),
       title: "Tax Strategy Onboarding",
-      barrierDismissible: true,
+      barrierDismissible: false,
     );
   } else {
     if (shouldCloseBefore) {
@@ -121,6 +121,11 @@ class _TaxStrategyOnboardingStepperState
   final _utilityPercentController = TextEditingController();
   final _mealPercentController = TextEditingController();
 
+  // New double variables for slider values
+  double _vehiclePercent = 100;
+  double _utilityPercent = 100;
+  double _mealPercent = 100;
+
   @override
   void initState() {
     super.initState();
@@ -170,12 +175,14 @@ class _TaxStrategyOnboardingStepperState
             org.totalHouseAreaSqft?.toString() ?? '';
         _dedicatedOfficeAreaController.text =
             org.dedicatedOfficeAreaSqft?.toString() ?? '';
-        _vehiclePercentController.text =
-            org.businessVehiclePercent?.toString() ?? '100';
-        _utilityPercentController.text =
-            org.businessUtilityPercent?.toString() ?? '100';
-        _mealPercentController.text =
-            org.businessMealPercent?.toString() ?? '100';
+        // Initialize percentage values from organization data
+        _vehiclePercent = (org.businessVehiclePercent ?? 100).toDouble();
+        _utilityPercent = (org.businessUtilityPercent ?? 100).toDouble();
+        _mealPercent = (org.businessMealPercent ?? 100).toDouble();
+        // Keep controllers in sync for any legacy usage
+        _vehiclePercentController.text = _vehiclePercent.round().toString();
+        _utilityPercentController.text = _utilityPercent.round().toString();
+        _mealPercentController.text = _mealPercent.round().toString();
       }
     }
   }
@@ -282,12 +289,12 @@ class _TaxStrategyOnboardingStepperState
             }
             data.addAll({
               'business_area_sqft': businessArea == 0 ? null : businessArea,
-              'business_vehicle_percent':
-                  int.tryParse(_vehiclePercentController.text.trim()) ?? 100,
-              'business_utility_percent':
-                  int.tryParse(_utilityPercentController.text.trim()) ?? 100,
-              'business_meal_percent':
-                  int.tryParse(_mealPercentController.text.trim()) ?? 100,
+            });
+            // Business Percentage Values
+            data.addAll({
+              'business_vehicle_percent': _vehiclePercent.round(),
+              'business_utility_percent': _utilityPercent.round(),
+              'business_meal_percent': _mealPercent.round(),
             });
             break;
           }
@@ -303,7 +310,7 @@ class _TaxStrategyOnboardingStepperState
       dismissLoadingWidget();
       setState(() => _isSaving = false);
 
-      if (_currentStep < 9) {
+      if (_currentStep < 8) {
         _pageController.nextPage(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
@@ -332,7 +339,7 @@ class _TaxStrategyOnboardingStepperState
   }
 
   void _nextWithoutSaving() {
-    if (_currentStep < 9) {
+    if (_currentStep < 8) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
@@ -352,7 +359,11 @@ class _TaxStrategyOnboardingStepperState
       appBar: kIsWeb
           ? null
           : AppBar(
-              title: Text('Tax Strategy — Step ${_currentStep + 1} of 9'),
+              title: const Column(
+                children: [
+                  Text('Tax Strategy'),
+                ],
+              ),
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () {
@@ -372,7 +383,7 @@ class _TaxStrategyOnboardingStepperState
         children: [
           if (kIsWeb)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
               child: Row(
                 children: [
                   IconButton(
@@ -391,18 +402,17 @@ class _TaxStrategyOnboardingStepperState
                   ),
                   const SizedBox(width: 8),
                   AppText(
-                    'Step ${_currentStep + 1} of 9',
+                    'Tax Strategy Onboarding',
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () => Get.back(),
-                    icon: const Icon(Icons.close),
                   ),
                 ],
               ),
             ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: TaxProgressBar(current: _currentStep + 1),
+          ),
           Expanded(
             child: PageView(
               controller: _pageController,
@@ -420,6 +430,16 @@ class _TaxStrategyOnboardingStepperState
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: TaxNavButtons(
+              onSkip: _nextWithoutSaving,
+              onNext: _saveAndNext,
+              nextLabel: _currentStep == 8 ? 'Save \u0026 Finish 🎯' : 'Save & Next',
+              showSkip: _currentStep != 8,
+              isLoading: _isSaving,
+            ),
+          ),
         ],
       ),
     );
@@ -435,21 +455,13 @@ class _TaxStrategyOnboardingStepperState
     bool showSkip = true,
   }) {
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       children: [
-        TaxProgressBar(current: step),
-        const SizedBox(height: 20),
+        const SizedBox(height: 10),
         TaxSectionTitle(icon: icon, title: title, subtitle: subtitle),
         const SizedBox(height: 24),
         ...children,
-        const SizedBox(height: 32),
-        TaxNavButtons(
-          onSkip: _nextWithoutSaving,
-          onNext: _saveAndNext,
-          nextLabel: nextLabel,
-          showSkip: showSkip,
-          isLoading: _isSaving,
-        ),
+        const SizedBox(height: 20),
       ],
     );
   }
@@ -842,7 +854,6 @@ class _TaxStrategyOnboardingStepperState
       title: 'AI Strategy Alignment',
       subtitle:
           'Final step — align your goals so our AI can build your personalized roadmap.',
-      nextLabel: 'Save & Finish 🎯',
       children: [
         AppText('Primary Tax Goal', fontSize: 14, fontWeight: FontWeight.w600),
         const SizedBox(height: 8),
@@ -883,8 +894,132 @@ class _TaxStrategyOnboardingStepperState
           selectedItem: _auditAppetite,
           onChanged: (v) => setState(() => _auditAppetite = v),
         ),
+      ],
+    );
+  }
+
+  Widget _buildStep9(ColorScheme colorScheme) {
+    return _buildStepWrapper(
+      step: 9,
+      icon: Icons.business,
+      title: 'Business Asset Details',
+      subtitle: 'Provide details about your business assets.',
+      showSkip: false,
+      nextLabel: 'Save \u0026 Finish 🎯',
+      children: [
+        Column(
+          children: [
+            Row(
+              children: [
+                AppText(
+                  'Total House Area (sqft)',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            AppTextField(
+              labelText: 'Total House Area (sqft)',
+              hintText: 'Enter total house area',
+              controller: _totalHouseAreaController,
+              keyboardType: TextInputType.number,
+              inputFormatters: acceptDecimalValues(),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                AppText(
+                  'Dedicated Office Area (sqft)',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            AppTextField(
+              labelText: 'Dedicated Office Area (sqft)',
+              hintText: 'Enter dedicated office area',
+              controller: _dedicatedOfficeAreaController,
+              keyboardType: TextInputType.number,
+              inputFormatters: acceptDecimalValues(),
+            ),
+            const SizedBox(height: 16),
+            // Vehicle Percent Slider
+            Row(
+              children: [
+                AppText(
+                  'Business Vehicle Percent',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ],
+            ),
+            Slider(
+              value: _vehiclePercent,
+              min: 0,
+              max: 100,
+              divisions: 100,
+              label: '${_vehiclePercent.round()}%',
+              onChanged: (double value) {
+                setState(() {
+                  _vehiclePercent = value;
+                  _vehiclePercentController.text = value.round().toString();
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            // Utility Percent Slider
+            Row(
+              children: [
+                AppText(
+                  'Business Utility Percent',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ],
+            ),
+            Slider(
+              value: _utilityPercent,
+              min: 0,
+              max: 100,
+              divisions: 100,
+              label: '${_utilityPercent.round()}%',
+              onChanged: (double value) {
+                setState(() {
+                  _utilityPercent = value;
+                  _utilityPercentController.text = value.round().toString();
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            // Meal Percent Slider
+            Row(
+              children: [
+                AppText(
+                  'Business Meal Percent',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ],
+            ),
+            Slider(
+              value: _mealPercent,
+              min: 0,
+              max: 100,
+              divisions: 100,
+              label: '${_mealPercent.round()}%',
+              onChanged: (double value) {
+                setState(() {
+                  _mealPercent = value;
+                  _mealPercentController.text = value.round().toString();
+                });
+              },
+            ),
+          ],
+        ),
         const SizedBox(height: 32),
-        // Completion Banner
+        // Completion Banner (moved from step 8)
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -930,60 +1065,6 @@ class _TaxStrategyOnboardingStepperState
               ),
             ],
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStep9(ColorScheme colorScheme) {
-    return _buildStepWrapper(
-      step: 9,
-      icon: Icons.business,
-      title: 'Business Asset Details',
-      subtitle: 'Provide details about your business assets.',
-      showSkip: false, // REMOVE SKIP from the last screen
-      children: [
-        Column(
-          children: [
-            AppTextField(
-              labelText: 'Total House Area (sqft)',
-              hintText: 'Enter total house area',
-              controller: _totalHouseAreaController,
-              keyboardType: TextInputType.number,
-              inputFormatters: acceptDecimalValues(),
-            ),
-            AppTextField(
-              labelText: 'Dedicated Office Area (sqft)',
-              hintText: 'Enter dedicated office area',
-              controller: _dedicatedOfficeAreaController,
-              keyboardType: TextInputType.number,
-              inputFormatters: acceptDecimalValues(),
-            ),
-            const SizedBox(height: 16),
-            AppTextField(
-              labelText: 'Business Vehicle Percent',
-              hintText: 'Enter business vehicle percent',
-              controller: _vehiclePercentController,
-              keyboardType: TextInputType.number,
-              inputFormatters: acceptOnlyInteger(),
-            ),
-            const SizedBox(height: 16),
-            AppTextField(
-              labelText: 'Business Utility Percent',
-              hintText: 'Enter business utility percent',
-              controller: _utilityPercentController,
-              keyboardType: TextInputType.number,
-              inputFormatters: acceptOnlyInteger(),
-            ),
-            const SizedBox(height: 16),
-            AppTextField(
-              labelText: 'Business Meal Percent',
-              hintText: 'Enter business meal percent',
-              controller: _mealPercentController,
-              keyboardType: TextInputType.number,
-              inputFormatters: acceptOnlyInteger(),
-            ),
-          ],
         ),
       ],
     );
