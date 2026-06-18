@@ -6,8 +6,10 @@ import 'package:booksmart/modules/user/ui/dashboard/widgets/ai_strategy_insight_
 import 'package:booksmart/modules/user/ui/dashboard/widgets/stats_header.dart';
 import 'package:booksmart/modules/user/ui/dashboard/widgets/achievements_grid.dart';
 import 'package:booksmart/modules/user/ui/dashboard/widgets/secondary_stats_cards.dart';
+import 'package:booksmart/routes/routes.dart';
 import 'package:flutter/material.dart';
 import 'package:accordion/accordion.dart';
+import 'package:get/get.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -36,6 +38,12 @@ class DashboardScreen extends StatelessWidget {
         children: [
           const StatsHeader(),
           const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () {
+              Get.toNamed(Routes.subscription);
+            },
+            child: Text("Temporary Subscription Button"),
+          ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

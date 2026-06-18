@@ -127,7 +127,7 @@ class TransactionCard extends StatelessWidget {
                           Text(
                             transaction.category == null
                                 ? "---"
-                                : "${categoryController.getCategoryName(transaction.category!)} • ${categoryController.getSubCategoryName(transaction.subcategory!)}",
+                                : "${categoryController.getCategoryName(transaction.category!)} • ${categoryController.getSubCategoryName(transaction.subcategory)}",
                             style: TextStyle(
                               fontSize: 13,
                               color: Colors.grey.shade700,

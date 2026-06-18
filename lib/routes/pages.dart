@@ -41,7 +41,7 @@ import '../modules/user/ui/organization/organization_list_screen.dart';
 import '../modules/user/ui/profile_screen.dart';
 import '../modules/user/ui/rules_management/rules_management_screen.dart';
 import '../modules/user/ui/settings/settings_screen.dart';
-import '../modules/user/ui/subscription/subscription_screen.dart';
+import '../modules/user/ui/subscription_screen.dart';
 import '../modules/user/ui/token/buy_tokens_screen.dart';
 import '../modules/user/ui/token/earn_tokens_screen.dart';
 

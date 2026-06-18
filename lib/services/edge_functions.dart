@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:developer';
 
+import 'package:booksmart/models/response_model.dart';
+import 'package:booksmart/models/stripe_product_model.dart';
 import 'package:booksmart/widgets/loading.dart';
 import 'package:get/get.dart';
 
@@ -278,6 +280,42 @@ Future<Map<String, dynamic>> aiCategorization() async {
   return jsonDecode(response.bodyString ?? '{}') as Map<String, dynamic>;
 }
 
+Future<ResponseModel> getStripeSubscriptionPlans() async {
+  log(supabase.auth.currentSession?.accessToken ?? "---");
+  return GetConnect(timeout: Duration(seconds: 60))
+      .post(
+        'https://pvppwmkswnluidlwnnck.supabase.co/functions/v1/get-subscription-plans?test=true',
+        jsonEncode({}),
+        headers: {
+          'Authorization':
+              'Bearer ${supabase.auth.currentSession?.accessToken}',
+
+          'Content-Type': 'application/json',
+        },
+      )
+      .then((response) {
+        log("StatusCode: ${response.statusCode}");
+
+        log(response.bodyString ?? "getSubscriptionPlans ::: null");
+
+        Map<String, dynamic> data = jsonDecode(response.bodyString ?? '{}');
+
+        List<dynamic> plansList = data["plans"];
+
+        return ResponseModel.value(
+          plansList.map((e) {
+            return StripePlan.fromJson(e);
+          }).toList(),
+          response.statusCode,
+        );
+      })
+      .onError((error, stackTrace) {
+        log(error.toString());
+        log(stackTrace.toString());
+        return ResponseModel.error(error: error.toString(), statusCode: null);
+      });
+}
+
 var x = '''
 You are a financial transaction categorization assistant.
 
@@ -307,3 +345,19 @@ Return ONLY JSON array:
 ]
 
 ''';
+
+
+
+
+
+
+
+/*
+              curl -L -X POST 'https://pvppwmkswnluidlwnnck.supabase.co/functions/v1/get-subscription-plans' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsImtpZCI6Im9wbEtraTNZYTFMY0I4RTEiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL3B2cHB3bWtzd25sdWlkbHdubmNrLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI2NmVjMWZhNi0wYTIyLTQ0ZTAtYTM4ZC03Y2Q0OTY0MTUwODIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgxMTQxMTMyLCJpYXQiOjE3ODExMzc1MzIsImVtYWlsIjoic2hhaHphZHFhaXNhcmtoYW5AZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbCI6InNoYWh6YWRxYWlzYXJraGFuQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInJvbGUiOiJ1c2VyIiwic3ViIjoiNjZlYzFmYTYtMGEyMi00NGUwLWEzOGQtN2NkNDk2NDE1MDgyIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3ODExMzc1MzJ9XSwic2Vzc2lvbl9pZCI6ImM5YWMxMTNlLThlMzQtNGM5ZC1hOTQ4LWRjYzA4ZDRlYzg0ZiIsImlzX2Fub255bW91cyI6ZmFsc2V9.WKBrV08LZUwUMNHQX03HlChuWqO_2wyEJPga7rjdpz0' \
+  -H 'Content-Type: application/json' \
+  -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB2cHB3bWtzd25sdWlkbHdubmNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2ODg1MjgsImV4cCI6MjA4MDI2NDUyOH0.Sa9fKeEn0jbbvswuyABNHrpb01E4iKfI65_1HgfPWsM' \
+  --data '{"name":"Functions"}'
+{"message":"Invalid credentials","code":"INVALID_CREDENTIALS"}   
+
+*/

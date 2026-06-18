@@ -71,6 +71,7 @@ class _AddCardScreenState extends State<AddCardScreen> {
                     card = c;
                   });
                 },
+                style: TextStyle(color: Colors.white),
                 decoration: const InputDecoration(border: InputBorder.none),
               ),
             ),
