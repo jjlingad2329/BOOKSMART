@@ -1,3 +1,9 @@
+import 'dart:developer';
+
+import 'package:booksmart/models/stripe_product_model.dart';
+import 'package:booksmart/modules/user/controllers/stripe_card_controller.dart';
+import 'package:booksmart/modules/user/ui/stripe/add_new_card_scree.dart';
+import 'package:booksmart/services/edge_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -12,11 +18,60 @@ class SubscriptionScreen extends StatefulWidget {
 
 class _SubscriptionScreenState extends State<SubscriptionScreen> {
   bool yearly = false;
+  late final StripeCardController _stripeCardController;
+  String? _subscribingPriceId;
 
   @override
   void initState() {
     super.initState();
-    Get.put(SubscriptionController(), permanent: true);
+    if (!Get.isRegistered<SubscriptionController>()) {
+      Get.put(SubscriptionController(), permanent: true);
+    }
+
+    if (Get.isRegistered<StripeCardController>()) {
+      _stripeCardController = Get.find<StripeCardController>();
+    } else {
+      _stripeCardController = Get.put(StripeCardController(), permanent: true);
+    }
+    _stripeCardController.loadCards();
+  }
+
+  Future<void> _createSubscription(StripePrice price) async {
+    if (_subscribingPriceId != null) return;
+
+    if (_stripeCardController.loading) {
+      await _stripeCardController.loadCards();
+    }
+
+    if (_stripeCardController.cards.isEmpty) {
+      Get.snackbar(
+        "Add a card first",
+        "Please add a payment card before choosing a subscription.",
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      goToAddNewCardScreen();
+      return;
+    }
+
+    setState(() => _subscribingPriceId = price.id);
+
+    try {
+      final response = await createStripeSubscription(priceId: price.id);
+
+      Get.snackbar(
+        "Subscription created",
+        "Status: ${response['status'] ?? 'created'}",
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e, x) {
+      log(e.toString());
+      log(x.toString());
+      Get.snackbar("Error", e.toString(), snackPosition: SnackPosition.BOTTOM);
+    } finally {
+      if (mounted) {
+        setState(() => _subscribingPriceId = null);
+      }
+    }
   }
 
   @override
@@ -101,9 +156,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                             interval: yearly ? "year" : "month",
                             isPopular: plan.name.toLowerCase().contains("plus"),
                             savings: yearly ? savings : 0,
-                            onSelect: () {
-                              // TODO: Stripe checkout later
-                            },
+                            isLoading: _subscribingPriceId == price.id,
+                            onSelect: _subscribingPriceId == null
+                                ? () => _createSubscription(price)
+                                : null,
                           );
                         }).toList(),
                       ),
@@ -183,7 +239,7 @@ class _ToggleItem extends StatelessWidget {
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                   ),
                 ]
@@ -207,7 +263,8 @@ class _PlanCard extends StatelessWidget {
   final String interval;
   final bool isPopular;
   final double savings;
-  final VoidCallback onSelect;
+  final bool isLoading;
+  final VoidCallback? onSelect;
 
   const _PlanCard({
     required this.planName,
@@ -215,6 +272,7 @@ class _PlanCard extends StatelessWidget {
     required this.interval,
     required this.isPopular,
     required this.savings,
+    required this.isLoading,
     required this.onSelect,
   });
 
@@ -229,7 +287,7 @@ class _PlanCard extends StatelessWidget {
         border: isPopular ? Border.all(color: Colors.blue, width: 2) : null,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -288,7 +346,7 @@ class _PlanCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
+                color: Colors.green.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -319,7 +377,13 @@ class _PlanCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
-              child: const Text("Choose Plan"),
+              child: isLoading
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text("Choose Plan"),
             ),
           ),
         ],

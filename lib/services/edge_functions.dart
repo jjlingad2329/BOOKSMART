@@ -316,6 +316,35 @@ Future<ResponseModel> getStripeSubscriptionPlans() async {
       });
 }
 
+Future<Map<String, dynamic>> createStripeSubscription({
+  required String priceId,
+  bool isTestMode = true,
+}) async {
+  final session = supabase.auth.currentSession;
+  if (session == null) throw Exception("User not logged in");
+
+  final response = await GetConnect(timeout: const Duration(seconds: 60)).post(
+    'https://pvppwmkswnluidlwnnck.supabase.co/functions/v1/create-subscription${isTestMode ? "?test=true" : ""}',
+    jsonEncode({'price_id': priceId}),
+    headers: {
+      'Authorization': 'Bearer ${session.accessToken}',
+      'Content-Type': 'application/json',
+    },
+  );
+
+  log("StatusCode: ${response.statusCode}");
+  log(response.bodyString ?? "createStripeSubscription ::: null");
+
+  final Map<String, dynamic> data =
+      jsonDecode(response.bodyString ?? '{}') as Map<String, dynamic>;
+
+  if (!response.isOk) {
+    throw Exception(data['error'] ?? 'Subscription creation failed');
+  }
+
+  return data;
+}
+
 var x = '''
 You are a financial transaction categorization assistant.
 
@@ -345,12 +374,6 @@ Return ONLY JSON array:
 ]
 
 ''';
-
-
-
-
-
-
 
 /*
               curl -L -X POST 'https://pvppwmkswnluidlwnnck.supabase.co/functions/v1/get-subscription-plans' \

@@ -79,7 +79,7 @@ Deno.serve(async (req: Request) => {
     // --------------------------------
     const { data: userData, error: userError } = await supabase
       .from("users")
-      .select("stripe_customer_id, email")
+      .select("id, stripe_customer_id, email")
       .eq("auth_id", user.id)
       .single();
 
@@ -139,7 +139,7 @@ Deno.serve(async (req: Request) => {
     const { data: existingSub } = await supabase
       .from("subscriptions")
       .select("id")
-      .eq("user_id", user.id)
+      .eq("user_id", userData.id)
       .in("status", ["active", "trialing"])
       .maybeSingle();
 
