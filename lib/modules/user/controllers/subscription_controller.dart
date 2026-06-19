@@ -13,6 +13,12 @@ class SubscriptionController extends GetxController {
 
   List<StripePlan> products = [];
 
+  List<StripePlan> get subscriptionProducts =>
+      products.where((product) => product.isSubscription).toList();
+
+  List<StripePlan> get tokenProducts =>
+      products.where((product) => product.isTokens).toList();
+
   @override
   void onInit() {
     super.onInit();

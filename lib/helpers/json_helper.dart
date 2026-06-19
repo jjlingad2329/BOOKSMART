@@ -12,3 +12,9 @@ T? handleResponseFromJson<T>(Map<String, dynamic> json, String key) {
     return null;
   }
 }
+
+DateTime dateFromJson(Map<String, dynamic> json, String key) {
+  final value = handleResponseFromJson<String>(json, key);
+  if (value == null || value.isEmpty) return DateTime.now();
+  return DateTime.tryParse(value) ?? DateTime.now();
+}

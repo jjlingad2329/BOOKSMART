@@ -13,6 +13,7 @@ import '../../../common/controllers/auth_controller.dart';
 import '../../../../routes/routes.dart';
 import '../../../../widgets/app_text.dart';
 import '../stripe/card_list_screen.dart';
+import '../token/buy_tokens_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -193,7 +194,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Get.toNamed(Routes.subscription);
           }),
           const SizedBox(height: 10),
-
+          buildTile("Purchase Tokens", () {
+            goToBuyTokensScreen();
+          }),
+          const SizedBox(height: 10),
           buildTile("Delete Account", () {}, isDestructive: false),
           const SizedBox(height: 10),
 

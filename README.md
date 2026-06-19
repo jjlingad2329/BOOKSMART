@@ -1,5 +1,10 @@
 # BookSmart
 
+## STRIPE
+while creating products must add following metadata
+product_type = tokens || subscription
+token_amount = 50 // if type is tokens
+
 
 ## DataModels
 - all should have default/auto-generated id from supabase

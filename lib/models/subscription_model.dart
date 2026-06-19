@@ -1,5 +1,22 @@
 import '../helpers/json_helper.dart';
 
+enum ProductType {
+  subscription('subscription'),
+  tokens('tokens'),
+  unknown('unknown');
+
+  const ProductType(this.value);
+
+  final String value;
+
+  static ProductType fromValue(String value) {
+    return ProductType.values.firstWhere(
+      (type) => type.value == value,
+      orElse: () => ProductType.unknown,
+    );
+  }
+}
+
 class SubscriptionModel {
   final int id;
   final String userId;
@@ -7,6 +24,7 @@ class SubscriptionModel {
   final String stripeSubscriptionId;
   final String stripePriceId;
   final String stripeProductId;
+  final ProductType productType;
   final String status;
   final DateTime currentPeriodStart;
   final DateTime currentPeriodEnd;
@@ -24,6 +42,7 @@ class SubscriptionModel {
     required this.stripeSubscriptionId,
     required this.stripePriceId,
     required this.stripeProductId,
+    required this.productType,
     required this.status,
     required this.currentPeriodStart,
     required this.currentPeriodEnd,
@@ -60,6 +79,10 @@ class SubscriptionModel {
           handleResponseFromJson<String>(json, 'stripe_price_id') ?? '',
       stripeProductId:
           handleResponseFromJson<String>(json, 'stripe_product_id') ?? '',
+      productType: ProductType.fromValue(
+        handleResponseFromJson<String>(json, 'product_type') ??
+            ProductType.subscription.value,
+      ),
       status: handleResponseFromJson<String>(json, 'status') ?? '',
       currentPeriodStart: _dateFromJson(json, 'current_period_start'),
       currentPeriodEnd: _dateFromJson(json, 'current_period_end'),
@@ -81,6 +104,7 @@ class SubscriptionModel {
       'stripe_subscription_id': stripeSubscriptionId,
       'stripe_price_id': stripePriceId,
       'stripe_product_id': stripeProductId,
+      'product_type': productType.value,
       'status': status,
       'current_period_start': currentPeriodStart.toIso8601String(),
       'current_period_end': currentPeriodEnd.toIso8601String(),

@@ -129,7 +129,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       body: SafeArea(
         child: GetBuilder<SubscriptionController>(
           builder: (SubscriptionController subscriptionController) {
-            final plans = subscriptionController.products;
+            final plans = subscriptionController.subscriptionProducts;
 
             return GetBuilder<UserSubscriptionController>(
               builder: (UserSubscriptionController userSubscriptionController) {
@@ -669,7 +669,7 @@ class _PlansSection extends StatelessWidget {
       );
     }
 
-    final plans = controller.products;
+    final plans = controller.subscriptionProducts;
 
     if (plans.isEmpty) {
       return _PlansMessage(

@@ -6,7 +6,6 @@ import 'package:get/get.dart';
 
 import '../modules/common/controllers/auth_controller.dart';
 import '../modules/user/controllers/organization_controller.dart';
-import '../modules/user/controllers/subscription_controller.dart';
 import '../modules/user/controllers/user_subscription_controller.dart';
 import '../models/organization_model.dart';
 import '../modules/common/providers/auth_provider.dart';

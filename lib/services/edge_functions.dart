@@ -369,6 +369,35 @@ Future<Map<String, dynamic>> createStripeSubscription({
   return data;
 }
 
+Future<Map<String, dynamic>> purchaseTokens({
+  required String priceId,
+  bool isTestMode = true,
+}) async {
+  final session = supabase.auth.currentSession;
+  if (session == null) throw Exception("User not logged in");
+
+  final response = await GetConnect(timeout: const Duration(seconds: 60)).post(
+    'https://pvppwmkswnluidlwnnck.supabase.co/functions/v1/purchase-tokens${isTestMode ? "?test=true" : ""}',
+    jsonEncode({'price_id': priceId}),
+    headers: {
+      'Authorization': 'Bearer ${session.accessToken}',
+      'Content-Type': 'application/json',
+    },
+  );
+
+  log("StatusCode: ${response.statusCode}");
+  log(response.bodyString ?? "purchaseTokens ::: null");
+
+  final Map<String, dynamic> data =
+      jsonDecode(response.bodyString ?? '{}') as Map<String, dynamic>;
+
+  if (!response.isOk) {
+    throw Exception(data['error'] ?? 'Token purchase failed');
+  }
+
+  return data;
+}
+
 var x = '''
 You are a financial transaction categorization assistant.
 

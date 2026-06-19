@@ -42,8 +42,8 @@ import '../modules/user/ui/profile_screen.dart';
 import '../modules/user/ui/rules_management/rules_management_screen.dart';
 import '../modules/user/ui/settings/settings_screen.dart';
 import '../modules/user/ui/subscription_screen.dart';
-import '../modules/user/ui/token/buy_tokens_screen.dart';
 import '../modules/user/ui/token/earn_tokens_screen.dart';
+import '../modules/user/ui/token/token_purchase_screen.dart';
 
 class AppPages {
   static final routes = [
@@ -64,7 +64,8 @@ class AppPages {
 
     GetPage(
       name: Routes.buyTokens,
-      page: () => getRequiredScreen(const BuyTokensScreen(), UserRole.user),
+      page: () =>
+          getRequiredScreen(const TokenPurchaseScreen(), UserRole.user),
     ),
     GetPage(
       name: Routes.streakUnlocked,
