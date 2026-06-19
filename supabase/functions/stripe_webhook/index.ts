@@ -143,7 +143,7 @@ Deno.serve(async (req: Request) => {
       // stripe_customer_id → look up user
       const { data: profile, error: profileError } = await supabase
         .from("users")
-        .select("id")
+        .select("id, auth_id")
         .eq("stripe_customer_id", sub.customer as string)
         .single();
 
@@ -152,10 +152,15 @@ Deno.serve(async (req: Request) => {
         return new Response("ok");
       }
 
+      if (!profile.auth_id) {
+        console.error("User profile has no auth_id for stripe_customer_id:", sub.customer);
+        return new Response("ok");
+      }
+
       const price = sub.items.data[0].price;
 
-      await supabase.from("subscriptions").insert({
-        user_id: profile.id,
+      const subscriptionRecord = {
+        user_id: profile.auth_id,
         stripe_customer_id: sub.customer as string,
         stripe_subscription_id: sub.id,
         stripe_price_id: price.id,
@@ -167,7 +172,39 @@ Deno.serve(async (req: Request) => {
         canceled_at: sub.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : null,
         trial_start: sub.trial_start ? new Date(sub.trial_start * 1000).toISOString() : null,
         trial_end: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
-      });
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: existingSubscription, error: lookupError } = await supabase
+        .from("subscriptions")
+        .select("id")
+        .eq("stripe_subscription_id", sub.id)
+        .maybeSingle();
+
+      if (lookupError) {
+        console.error("Subscription lookup failed:", {
+          stripe_subscription_id: sub.id,
+          error: lookupError,
+        });
+        return new Response("ok");
+      }
+
+      const { error: saveError } = existingSubscription
+        ? await supabase
+          .from("subscriptions")
+          .update(subscriptionRecord)
+          .eq("stripe_subscription_id", sub.id)
+        : await supabase.from("subscriptions").insert(subscriptionRecord);
+
+      if (saveError) {
+        console.error("Subscription save failed:", {
+          stripe_subscription_id: sub.id,
+          profile_id: profile.id,
+          auth_id: profile.auth_id,
+          error: saveError,
+        });
+        return new Response("ok");
+      }
 
       console.log("Subscription created:", sub.id);
     }

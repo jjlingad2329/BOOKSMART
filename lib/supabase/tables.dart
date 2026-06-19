@@ -18,4 +18,5 @@ class SupabaseTable {
   static String deductionRules = 'deduction_rules';
   static String aiTaxStrategies = 'ai_tax_strategies';
   static String aiChatMessages = 'ai_chat_messages';
+  static String subscriptions = 'subscriptions';
 }

@@ -6,6 +6,8 @@ import 'package:get/get.dart';
 
 import '../modules/common/controllers/auth_controller.dart';
 import '../modules/user/controllers/organization_controller.dart';
+import '../modules/user/controllers/subscription_controller.dart';
+import '../modules/user/controllers/user_subscription_controller.dart';
 import '../models/organization_model.dart';
 import '../modules/common/providers/auth_provider.dart';
 import '../modules/user/providers/organization_provider.dart';
@@ -30,6 +32,8 @@ Future<String> getInitialRoute() async {
   Get.put(CategoryAdminController(), permanent: true);
 
   if (authPerson?.role == UserRole.user) {
+    Get.put(UserSubscriptionController(), permanent: true);
+
     final List<OrganizationModel> organizations = await getOrganizations(
       userId: authPerson?.id,
     );

@@ -54,10 +54,16 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
     _didInitialControllerSync = true;
     final orgId = getCurrentOrganization?.id;
     if (orgId == null) return;
-    final controller = Get.find<FinancialReportController>(tag: orgId.toString());
+    final controller = Get.find<FinancialReportController>(
+      tag: orgId.toString(),
+    );
     final DateTime? selectedEnd = controller.lastEndDate;
     if (selectedEnd != null) {
-      _asOfDate = DateTime(selectedEnd.year, selectedEnd.month, selectedEnd.day);
+      _asOfDate = DateTime(
+        selectedEnd.year,
+        selectedEnd.month,
+        selectedEnd.day,
+      );
     }
     if (controller.balanceSheetComparisonMode != 0) {
       controller.setBalanceSheetComparisonMode(0);
@@ -115,7 +121,9 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
               surface: isDark ? const Color(0xFF0F1E37) : Colors.white,
               onSurface: isDark ? Colors.white : Colors.black87,
             ),
-            scaffoldBackgroundColor: isDark ? const Color(0xFF0F1E37) : Colors.white,
+            scaffoldBackgroundColor: isDark
+                ? const Color(0xFF0F1E37)
+                : Colors.white,
           ),
           child: child!,
         );
@@ -162,7 +170,11 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                 color: isDark ? Colors.white : Colors.black87,
               ),
               const SizedBox(width: 6),
-              const Icon(Icons.calendar_today_outlined, size: 16, color: orangeColor),
+              const Icon(
+                Icons.calendar_today_outlined,
+                size: 16,
+                color: orangeColor,
+              ),
             ],
           ),
         ),
@@ -201,18 +213,19 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
       final exportService = PdfExportService();
       final exportEnd = DateTime(asOfDate.year, asOfDate.month, asOfDate.day);
       final exportViewType = request?.viewType ?? PdfViewType.monthly;
-      final exportStart = request?.startDate ??
-          DateTime(exportEnd.year, exportEnd.month, 1);
+      final exportStart =
+          request?.startDate ?? DateTime(exportEnd.year, exportEnd.month, 1);
       final List<DateTime> columnEnds;
       final List<String> displayBucketLabels;
       if (request?.balanceSheetSnapshotEnds != null &&
           request!.balanceSheetSnapshotEnds!.isNotEmpty) {
         columnEnds = List<DateTime>.from(request.balanceSheetSnapshotEnds!);
-        displayBucketLabels = PdfExportService.buildBalanceSheetSnapshotColumnLabels(
-          columnEnds,
-          exportViewType,
-          exportEnd,
-        );
+        displayBucketLabels =
+            PdfExportService.buildBalanceSheetSnapshotColumnLabels(
+              columnEnds,
+              exportViewType,
+              exportEnd,
+            );
       } else {
         final bucketLabels = exportService.buildBucketLabels(
           exportStart,
@@ -416,7 +429,8 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         return result;
       }
 
-      String monthKey(DateTime d) => DateFormat('yyyy-MM').format(DateTime(d.year, d.month, 1));
+      String monthKey(DateTime d) =>
+          DateFormat('yyyy-MM').format(DateTime(d.year, d.month, 1));
 
       List<DateTime> buildBucketStarts() {
         switch (exportViewType) {
@@ -447,7 +461,6 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                 DateTime(y, 1, 1),
             ];
         }
-        return <DateTime>[];
       }
 
       final bucketStarts = buildBucketStarts();
@@ -456,13 +469,14 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
           switch (exportViewType) {
             PdfViewType.monthly => [monthKey(start)],
             PdfViewType.quarterly => [
-                monthKey(start),
-                monthKey(DateTime(start.year, start.month + 1, 1)),
-                monthKey(DateTime(start.year, start.month + 2, 1)),
-              ],
+              monthKey(start),
+              monthKey(DateTime(start.year, start.month + 1, 1)),
+              monthKey(DateTime(start.year, start.month + 2, 1)),
+            ],
             PdfViewType.yearly => [
-                for (int m = 1; m <= 12; m++) monthKey(DateTime(start.year, m, 1)),
-              ],
+              for (int m = 1; m <= 12; m++)
+                monthKey(DateTime(start.year, m, 1)),
+            ],
           },
       ];
 
@@ -608,10 +622,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
       }
 
       int row = 6;
-      void writeYearHeader(
-        String label, {
-        excel_lib.CellStyle? bandStyle,
-      }) {
+      void writeYearHeader(String label, {excel_lib.CellStyle? bandStyle}) {
         final style = bandStyle ?? headerStyle;
         setCell(labelCol, row, excel_lib.TextCellValue(label), style);
         for (int i = 0; i < yearCount; i++) {
@@ -622,11 +633,20 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
             headerColumnDateStyle,
           );
           sheet.merge(
-            excel_lib.CellIndex.indexByColumnRow(columnIndex: symbolCol(i), rowIndex: row),
-            excel_lib.CellIndex.indexByColumnRow(columnIndex: amountCol(i), rowIndex: row),
+            excel_lib.CellIndex.indexByColumnRow(
+              columnIndex: symbolCol(i),
+              rowIndex: row,
+            ),
+            excel_lib.CellIndex.indexByColumnRow(
+              columnIndex: amountCol(i),
+              rowIndex: row,
+            ),
           );
           sheet.setMergedCellStyle(
-            excel_lib.CellIndex.indexByColumnRow(columnIndex: symbolCol(i), rowIndex: row),
+            excel_lib.CellIndex.indexByColumnRow(
+              columnIndex: symbolCol(i),
+              rowIndex: row,
+            ),
             headerColumnDateStyle,
           );
         }
@@ -648,12 +668,12 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         final lineStyle = isSection
             ? sectionLabelStyle
             : isTotal
-                ? (useLiabilityTotalStyle
-                      ? liabilityTotalLabelStyle
-                      : totalLabelStyle)
-                : ratioLine
-                    ? ratioLabelStyle
-                    : lineLabelStyle;
+            ? (useLiabilityTotalStyle
+                  ? liabilityTotalLabelStyle
+                  : totalLabelStyle)
+            : ratioLine
+            ? ratioLabelStyle
+            : lineLabelStyle;
         setCell(
           labelCol,
           row,
@@ -667,15 +687,15 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                     ? liabilityTotalCurrencyStyle
                     : totalCurrencyStyle)
               : ratioLine
-                  ? (ratioUsesCurrency ? ratioWorkingCapitalStyle : ratioValueStyle)
-                  : currencyStyle;
+              ? (ratioUsesCurrency ? ratioWorkingCapitalStyle : ratioValueStyle)
+              : currencyStyle;
           final excel_lib.CellStyle moneyDollarStyle = isTotal
               ? (useLiabilityTotalStyle
                     ? liabilityTotalDollarStyle
                     : totalDollarStyle)
               : ratioLine
-                  ? ratioDollarStyle
-                  : dollarStyle;
+              ? ratioDollarStyle
+              : dollarStyle;
 
           setCell(
             symbolCol(i),
@@ -683,7 +703,8 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
             excel_lib.TextCellValue(showDollar ? '\$' : ' '),
             moneyDollarStyle,
           );
-          if (formulasByYearIndex != null && formulasByYearIndex.containsKey(i)) {
+          if (formulasByYearIndex != null &&
+              formulasByYearIndex.containsKey(i)) {
             setCell(
               amountCol(i),
               row,
@@ -692,7 +713,12 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
             );
           } else {
             final value = valuesByYearIndex?[i] ?? 0.0;
-            setCell(amountCol(i), row, excel_lib.DoubleCellValue(value), moneyStyle);
+            setCell(
+              amountCol(i),
+              row,
+              excel_lib.DoubleCellValue(value),
+              moneyStyle,
+            );
           }
         }
         final writtenRow = row;
@@ -727,16 +753,26 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
       for (int i = 0; i < yearCount; i++) {
         if (useEngineColumns) {
           final m = _balanceSheetMetricsAt(controller, columnEnds[i]);
-          final curAssets =
-              m.currentAssetsBreakdown.values.fold(0.0, (a, b) => a + b);
-          final fixedAssets =
-              m.fixedAssetsBreakdown.values.fold(0.0, (a, b) => a + b);
-          final otherAssets =
-              m.otherAssetsBreakdown.values.fold(0.0, (a, b) => a + b);
-          final curLiab =
-              m.currentLiabilitiesBreakdown.values.fold(0.0, (a, b) => a + b);
-          final longLiab =
-              m.longTermLiabilitiesBreakdown.values.fold(0.0, (a, b) => a + b);
+          final curAssets = m.currentAssetsBreakdown.values.fold(
+            0.0,
+            (a, b) => a + b,
+          );
+          final fixedAssets = m.fixedAssetsBreakdown.values.fold(
+            0.0,
+            (a, b) => a + b,
+          );
+          final otherAssets = m.otherAssetsBreakdown.values.fold(
+            0.0,
+            (a, b) => a + b,
+          );
+          final curLiab = m.currentLiabilitiesBreakdown.values.fold(
+            0.0,
+            (a, b) => a + b,
+          );
+          final longLiab = m.longTermLiabilitiesBreakdown.values.fold(
+            0.0,
+            (a, b) => a + b,
+          );
           final cash = m.currentAssetsBreakdown['Cash'] ?? 0;
           final ar = m.currentAssetsBreakdown['Accounts Receivable'] ?? 0;
           final inventory = m.currentAssetsBreakdown['Inventory'] ?? 0;
@@ -868,11 +904,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
       writeYearHeader('ASSETS');
 
       writeLine('CURRENT ASSETS', isSection: true);
-      writeLine(
-        'Cash',
-        indent: true,
-        valuesByYearIndex: valuesMap(cashVals),
-      );
+      writeLine('Cash', indent: true, valuesByYearIndex: valuesMap(cashVals));
       writeLine(
         'Accounts Receivable',
         indent: true,
@@ -1051,7 +1083,12 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
       );
 
       row++;
-      setCell(labelCol, row, excel_lib.TextCellValue('FINANCIAL RATIOS'), ratioHeaderStyle);
+      setCell(
+        labelCol,
+        row,
+        excel_lib.TextCellValue('FINANCIAL RATIOS'),
+        ratioHeaderStyle,
+      );
       sheet.setRowHeight(row, 20);
       for (int i = 0; i < yearCount; i++) {
         setCell(
@@ -1061,11 +1098,20 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
           ratioHeaderStyle,
         );
         sheet.merge(
-          excel_lib.CellIndex.indexByColumnRow(columnIndex: symbolCol(i), rowIndex: row),
-          excel_lib.CellIndex.indexByColumnRow(columnIndex: amountCol(i), rowIndex: row),
+          excel_lib.CellIndex.indexByColumnRow(
+            columnIndex: symbolCol(i),
+            rowIndex: row,
+          ),
+          excel_lib.CellIndex.indexByColumnRow(
+            columnIndex: amountCol(i),
+            rowIndex: row,
+          ),
         );
         sheet.setMergedCellStyle(
-          excel_lib.CellIndex.indexByColumnRow(columnIndex: symbolCol(i), rowIndex: row),
+          excel_lib.CellIndex.indexByColumnRow(
+            columnIndex: symbolCol(i),
+            rowIndex: row,
+          ),
           ratioHeaderStyle,
         );
       }
@@ -1077,8 +1123,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         showDollar: false,
         formulasByYearIndex: {
           for (int i = 0; i < yearCount; i++)
-            i:
-                '=IF(${colLetter(amountCol(i))}${rTotalAssets + 1}=0,"-",(${colLetter(amountCol(i))}${rTotalCurrentLiab + 1}+${colLetter(amountCol(i))}${rTotalLongTermLiab + 1})/${colLetter(amountCol(i))}${rTotalAssets + 1})',
+            i: '=IF(${colLetter(amountCol(i))}${rTotalAssets + 1}=0,"-",(${colLetter(amountCol(i))}${rTotalCurrentLiab + 1}+${colLetter(amountCol(i))}${rTotalLongTermLiab + 1})/${colLetter(amountCol(i))}${rTotalAssets + 1})',
         },
       );
       final ratioRow2 = writeLine(
@@ -1087,8 +1132,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         showDollar: false,
         formulasByYearIndex: {
           for (int i = 0; i < yearCount; i++)
-            i:
-                '=IF(${colLetter(amountCol(i))}${rTotalCurrentLiab + 1}=0,"-",${colLetter(amountCol(i))}${rTotalCurrentAssets + 1}/${colLetter(amountCol(i))}${rTotalCurrentLiab + 1})',
+            i: '=IF(${colLetter(amountCol(i))}${rTotalCurrentLiab + 1}=0,"-",${colLetter(amountCol(i))}${rTotalCurrentAssets + 1}/${colLetter(amountCol(i))}${rTotalCurrentLiab + 1})',
         },
       );
       final ratioRow3 = writeLine(
@@ -1098,8 +1142,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         ratioUsesCurrency: true,
         formulasByYearIndex: {
           for (int i = 0; i < yearCount; i++)
-            i:
-                '=${colLetter(amountCol(i))}${rTotalCurrentAssets + 1}-${colLetter(amountCol(i))}${rTotalCurrentLiab + 1}',
+            i: '=${colLetter(amountCol(i))}${rTotalCurrentAssets + 1}-${colLetter(amountCol(i))}${rTotalCurrentLiab + 1}',
         },
       );
       final ratioRow4 = writeLine(
@@ -1108,8 +1151,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         showDollar: false,
         formulasByYearIndex: {
           for (int i = 0; i < yearCount; i++)
-            i:
-                '=IF(${colLetter(amountCol(i))}${rTotalEquity + 1}=0,"-",${colLetter(amountCol(i))}${rTotalAssets + 1}/${colLetter(amountCol(i))}${rTotalEquity + 1})',
+            i: '=IF(${colLetter(amountCol(i))}${rTotalEquity + 1}=0,"-",${colLetter(amountCol(i))}${rTotalAssets + 1}/${colLetter(amountCol(i))}${rTotalEquity + 1})',
         },
       );
       final ratioRow5 = writeLine(
@@ -1118,11 +1160,16 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         showDollar: false,
         formulasByYearIndex: {
           for (int i = 0; i < yearCount; i++)
-            i:
-                '=IF(${colLetter(amountCol(i))}${rTotalEquity + 1}=0,"-",(${colLetter(amountCol(i))}${rTotalCurrentLiab + 1}+${colLetter(amountCol(i))}${rTotalLongTermLiab + 1})/${colLetter(amountCol(i))}${rTotalEquity + 1})',
+            i: '=IF(${colLetter(amountCol(i))}${rTotalEquity + 1}=0,"-",(${colLetter(amountCol(i))}${rTotalCurrentLiab + 1}+${colLetter(amountCol(i))}${rTotalLongTermLiab + 1})/${colLetter(amountCol(i))}${rTotalEquity + 1})',
         },
       );
-      for (final rr in [ratioRow1, ratioRow2, ratioRow3, ratioRow4, ratioRow5]) {
+      for (final rr in [
+        ratioRow1,
+        ratioRow2,
+        ratioRow3,
+        ratioRow4,
+        ratioRow5,
+      ]) {
         sheet.setRowHeight(rr, 20);
       }
 
@@ -1206,34 +1253,63 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
       buffer.writeln('');
     }
 
-    final currentAssets = controller.currentAssetsBreakdown.values.fold(0.0, (a, b) => a + b);
-    final fixedAssets = controller.fixedAssetsBreakdown.values.fold(0.0, (a, b) => a + b);
-    final otherAssets = controller.otherAssetsBreakdown.values.fold(0.0, (a, b) => a + b);
+    final currentAssets = controller.currentAssetsBreakdown.values.fold(
+      0.0,
+      (a, b) => a + b,
+    );
+    final fixedAssets = controller.fixedAssetsBreakdown.values.fold(
+      0.0,
+      (a, b) => a + b,
+    );
+    final otherAssets = controller.otherAssetsBreakdown.values.fold(
+      0.0,
+      (a, b) => a + b,
+    );
     final totalAssets = controller.totalAssets.value;
 
-    addCsvSection('Current Assets', controller.currentAssetsBreakdown, currentAssets);
+    addCsvSection(
+      'Current Assets',
+      controller.currentAssetsBreakdown,
+      currentAssets,
+    );
     addCsvSection('Fixed Assets', controller.fixedAssetsBreakdown, fixedAssets);
     addCsvSection('Other Assets', controller.otherAssetsBreakdown, otherAssets);
     buffer.writeln('TOTAL ASSETS,$totalAssets');
     buffer.writeln('');
 
-    final currentLiab = controller.currentLiabilitiesBreakdown.values.fold(0.0, (a, b) => a + b);
-    final longTermLiab = controller.longTermLiabilitiesBreakdown.values.fold(0.0, (a, b) => a + b);
+    final currentLiab = controller.currentLiabilitiesBreakdown.values.fold(
+      0.0,
+      (a, b) => a + b,
+    );
+    final longTermLiab = controller.longTermLiabilitiesBreakdown.values.fold(
+      0.0,
+      (a, b) => a + b,
+    );
     final totalLiab = controller.totalLiabilities.value;
 
-    addCsvSection('Current Liabilities', controller.currentLiabilitiesBreakdown, currentLiab);
-    addCsvSection('Long-Term Liabilities', controller.longTermLiabilitiesBreakdown, longTermLiab);
+    addCsvSection(
+      'Current Liabilities',
+      controller.currentLiabilitiesBreakdown,
+      currentLiab,
+    );
+    addCsvSection(
+      'Long-Term Liabilities',
+      controller.longTermLiabilitiesBreakdown,
+      longTermLiab,
+    );
 
-    final equityMap = <String, double>{
-      ...controller.ownerEquityBreakdown,
-    };
+    final equityMap = <String, double>{...controller.ownerEquityBreakdown};
     final totalEquity = totalAssets - totalLiab;
     addCsvSection('Equity', equityMap, totalEquity);
 
     buffer.writeln('TOTAL LIABILITIES & EQUITY,${totalLiab + totalEquity}');
 
     final csvBytes = utf8.encode(buffer.toString());
-    await downloadFile('Balance_Sheet_${orgName.replaceAll(" ", "_")}.csv', csvBytes, mimeType: 'text/csv');
+    await downloadFile(
+      'Balance_Sheet_${orgName.replaceAll(" ", "_")}.csv',
+      csvBytes,
+      mimeType: 'text/csv',
+    );
   }
 
   double _percentChange(double current, double previous) {
@@ -1277,10 +1353,15 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
     final isPositive = change >= 0;
     final Color softRed = const Color(0xFFE57373);
     final Color changeColor = isPositive ? const Color(0xFF19C37D) : softRed;
-    final IconData changeIcon = isPositive ? Icons.arrow_upward : Icons.arrow_downward;
-    
-    final bool isNegativeValue = value.contains('-') || (isCurrency && value.startsWith('-\$'));
-    final Color valueColor = isNegativeValue ? softRed : (isDark ? Colors.white : Colors.black87);
+    final IconData changeIcon = isPositive
+        ? Icons.arrow_upward
+        : Icons.arrow_downward;
+
+    final bool isNegativeValue =
+        value.contains('-') || (isCurrency && value.startsWith('-\$'));
+    final Color valueColor = isNegativeValue
+        ? softRed
+        : (isDark ? Colors.white : Colors.black87);
     final tooltipText = showInfoIcon ? kpiTooltipTextForTitle(title) : null;
 
     return Container(
@@ -1288,7 +1369,12 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor ?? (isDark ? Colors.yellow.withValues(alpha: 0.3) : Colors.black12), width: borderWidth ?? 0.5),
+        border: Border.all(
+          color:
+              borderColor ??
+              (isDark ? Colors.yellow.withValues(alpha: 0.3) : Colors.black12),
+          width: borderWidth ?? 0.5,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
@@ -1301,57 +1387,72 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         alignment: Alignment.topCenter,
         children: [
           Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              title,
-              style: TextStyle(
-                fontFamily: 'Outfit',
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white70 : Colors.black54,
-              ),
-              softWrap: false,
-              overflow: TextOverflow.visible,
-            ),
-          ),
-          const SizedBox(height: 12),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: AppText(value, fontSize: 28, fontWeight: FontWeight.w900, color: valueColor),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 4,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isPositive ? changeColor.withValues(alpha: 0.15) : softRed.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(changeIcon, size: 12, color: changeColor),
-                    const SizedBox(width: 4),
-                    AppText(
-                      "${change.abs().toStringAsFixed(1)}%",
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: changeColor,
-                      disableFormat: true,
-                    ),
-                  ],
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'Outfit',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                  ),
+                  softWrap: false,
+                  overflow: TextOverflow.visible,
                 ),
               ),
-              AppText(comparisonCaption, fontSize: 11, color: isDark ? Colors.white30 : Colors.black38, disableFormat: true),
-            ],
+              const SizedBox(height: 12),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: AppText(
+                  value,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: valueColor,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isPositive
+                          ? changeColor.withValues(alpha: 0.15)
+                          : softRed.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(changeIcon, size: 12, color: changeColor),
+                        const SizedBox(width: 4),
+                        AppText(
+                          "${change.abs().toStringAsFixed(1)}%",
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: changeColor,
+                          disableFormat: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                  AppText(
+                    comparisonCaption,
+                    fontSize: 11,
+                    color: isDark ? Colors.white30 : Colors.black38,
+                    disableFormat: true,
+                  ),
+                ],
               ),
             ],
           ),
@@ -1363,7 +1464,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                 message: tooltipText,
                 semanticLabel: "More information about $title",
               ),
-          ),
+            ),
         ],
       ),
     );
@@ -1378,32 +1479,42 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         if (TickerMode.of(context)) {
           _syncAsOfFromSelectedRange(controller);
         }
-        if (controller.isLoading.value && !controller.hasPresentedFinancialData) {
-          return const Center(child: CircularProgressIndicator(color: orangeColor));
+        if (controller.isLoading.value &&
+            !controller.hasPresentedFinancialData) {
+          return const Center(
+            child: CircularProgressIndicator(color: orangeColor),
+          );
         }
 
         final totalAssets = controller.totalAssets.value;
         final totalLiabilities = controller.totalLiabilities.value;
         final totalEquity = totalAssets - totalLiabilities;
         final previousEquity =
-            controller.prevPeriodAssets.value - controller.prevPeriodLiabilities.value;
-        final assetsChange =
-            _percentChange(totalAssets, controller.prevPeriodAssets.value);
-        final liabilitiesChange =
-            _percentChange(totalLiabilities, controller.prevPeriodLiabilities.value);
+            controller.prevPeriodAssets.value -
+            controller.prevPeriodLiabilities.value;
+        final assetsChange = _percentChange(
+          totalAssets,
+          controller.prevPeriodAssets.value,
+        );
+        final liabilitiesChange = _percentChange(
+          totalLiabilities,
+          controller.prevPeriodLiabilities.value,
+        );
         final equityChange = _percentChange(totalEquity, previousEquity);
-        final currentRatioChange =
-            _percentChange(controller.currentRatio, controller.prevPeriodCurrentRatio);
-        final debtToEquityChange =
-            _percentChange(controller.debtToEquity, controller.prevPeriodDebtToEquity);
+        final currentRatioChange = _percentChange(
+          controller.currentRatio,
+          controller.prevPeriodCurrentRatio,
+        );
+        final debtToEquityChange = _percentChange(
+          controller.debtToEquity,
+          controller.prevPeriodDebtToEquity,
+        );
         final roeChange = _percentChange(
           controller.returnOnEquity,
           controller.prevPeriodReturnOnEquity,
         );
-        final curLiabilities = controller.currentLiabilitiesBreakdown.values.fold(
-          0.0,
-          (a, b) => a + b,
-        );
+        final curLiabilities = controller.currentLiabilitiesBreakdown.values
+            .fold(0.0, (a, b) => a + b);
         final currentRatioValue = curLiabilities.abs() < 0.000001
             ? "N/A"
             : controller.currentRatio.toStringAsFixed(2);
@@ -1486,7 +1597,9 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                         offset: const Offset(0, 40),
                         color: isDark ? const Color(0xFF1E293B) : Colors.white,
                         elevation: 8,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         onSelected: (value) {
                           if (value == 'csv') _exportCSV(controller);
                           if (value == 'pdf') {
@@ -1494,11 +1607,10 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                               context: context,
                               companyName:
                                   (getCurrentOrganization?.name ?? '')
-                                          .trim()
-                                          .isNotEmpty
-                                      ? (getCurrentOrganization?.name ?? '')
-                                            .trim()
-                                      : 'Booksmart',
+                                      .trim()
+                                      .isNotEmpty
+                                  ? (getCurrentOrganization?.name ?? '').trim()
+                                  : 'Booksmart',
                               companyAddress: 'Address not available',
                               reportType: ExportPdfReportType.balanceSheet,
                               balanceSheetAdvancedExport: true,
@@ -1524,11 +1636,10 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                               context: context,
                               companyName:
                                   (getCurrentOrganization?.name ?? '')
-                                          .trim()
-                                          .isNotEmpty
-                                      ? (getCurrentOrganization?.name ?? '')
-                                            .trim()
-                                      : 'Booksmart',
+                                      .trim()
+                                      .isNotEmpty
+                                  ? (getCurrentOrganization?.name ?? '').trim()
+                                  : 'Booksmart',
                               companyAddress: 'Address not available',
                               reportType: ExportPdfReportType.balanceSheet,
                               balanceSheetAdvancedExport: true,
@@ -1552,11 +1663,50 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                           }
                         },
                         itemBuilder: (context) => [
-                          PopupMenuItem(value: 'csv', child: AppText("Export CSV", fontSize: 13, color: isDark ? Colors.white : Colors.black87)),
-                          PopupMenuItem<String>(height: 1, padding: EdgeInsets.zero, enabled: false, child: Divider(height: 1, thickness: 0.2, color: isDark ? Colors.white24 : Colors.black12)),
-                          PopupMenuItem(value: 'pdf', child: AppText("Export PDF", fontSize: 13, color: isDark ? Colors.white : Colors.black87)),
-                          PopupMenuItem<String>(height: 1, padding: EdgeInsets.zero, enabled: false, child: Divider(height: 1, thickness: 0.2, color: isDark ? Colors.white24 : Colors.black12)),
-                          PopupMenuItem(value: 'excel', child: AppText("Export Excel", fontSize: 13, color: isDark ? Colors.white : Colors.black87)),
+                          PopupMenuItem(
+                            value: 'csv',
+                            child: AppText(
+                              "Export CSV",
+                              fontSize: 13,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          PopupMenuItem<String>(
+                            height: 1,
+                            padding: EdgeInsets.zero,
+                            enabled: false,
+                            child: Divider(
+                              height: 1,
+                              thickness: 0.2,
+                              color: isDark ? Colors.white24 : Colors.black12,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'pdf',
+                            child: AppText(
+                              "Export PDF",
+                              fontSize: 13,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          PopupMenuItem<String>(
+                            height: 1,
+                            padding: EdgeInsets.zero,
+                            enabled: false,
+                            child: Divider(
+                              height: 1,
+                              thickness: 0.2,
+                              color: isDark ? Colors.white24 : Colors.black12,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'excel',
+                            child: AppText(
+                              "Export Excel",
+                              fontSize: 13,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
                         ],
                         child: Builder(
                           builder: (context) {
@@ -1564,21 +1714,40 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                             return StatefulBuilder(
                               builder: (context, setState) {
                                 return MouseRegion(
-                                  onEnter: (_) => setState(() => isHovered = true),
-                                  onExit: (_) => setState(() => isHovered = false),
+                                  onEnter: (_) =>
+                                      setState(() => isHovered = true),
+                                  onExit: (_) =>
+                                      setState(() => isHovered = false),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 10,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: isHovered ? orangeColor.withValues(alpha: 0.1) : Colors.transparent,
-                                      border: Border.all(color: orangeColor, width: 1.2),
+                                      color: isHovered
+                                          ? orangeColor.withValues(alpha: 0.1)
+                                          : Colors.transparent,
+                                      border: Border.all(
+                                        color: orangeColor,
+                                        width: 1.2,
+                                      ),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: const [
-                                        AppText("EXPORT", fontSize: 12, fontWeight: FontWeight.w600, color: orangeColor),
+                                        AppText(
+                                          "EXPORT",
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: orangeColor,
+                                        ),
                                         SizedBox(width: 6),
-                                        Icon(Icons.keyboard_arrow_down, size: 16, color: orangeColor),
+                                        Icon(
+                                          Icons.keyboard_arrow_down,
+                                          size: 16,
+                                          color: orangeColor,
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -1588,278 +1757,347 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                           },
                         ),
                       ),
-                      _outlineButton("Upload", onPressed: () => showUploadTaxDocumentDialog(type: 'bs')),
+                      _outlineButton(
+                        "Upload",
+                        onPressed: () =>
+                            showUploadTaxDocumentDialog(type: 'bs'),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
 
                 // 🔹 Top Section: 3 Large Cards
-                isNarrow 
-                ? Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: screenWidth - 36,
-                      child: _premiumKPICard(
-                        title: "Total Assets",
-                        value: _formatCurrency(totalAssets),
-                        change: assetsChange,
-                        isCurrency: true,
-                        comparisonCaption: compareCap,
-                        borderColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.15) : Colors.black12,
-                        borderWidth: 0.8,
-                        showInfoIcon: false,
-                      ),
-                    ),
-                    SizedBox(
-                      width: screenWidth - 36,
-                      child: _premiumKPICard(
-                        title: "Total Liabilities",
-                        value: _formatCurrency(totalLiabilities),
-                        change: liabilitiesChange,
-                        isCurrency: true,
-                        comparisonCaption: compareCap,
-                        borderColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.15) : Colors.black12,
-                        borderWidth: 0.8,
-                      ),
-                    ),
-                    SizedBox(
-                      width: screenWidth - 36,
-                      child: _premiumKPICard(
-                        title: "Equity",
-                        value: _formatCurrency(totalEquity),
-                        change: equityChange,
-                        isCurrency: true,
-                        comparisonCaption: compareCap,
-                        borderColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.15) : Colors.black12,
-                        borderWidth: 0.8,
-                      ),
-                    ),
-                  ],
-                )
-                : IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: _premiumKPICard(
-                          title: "Total Assets",
-                          value: _formatCurrency(totalAssets),
-                          change: assetsChange,
-                          isCurrency: true,
-                          comparisonCaption: compareCap,
-                          borderColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.15) : Colors.black12,
-                          borderWidth: 0.8,
-                          showInfoIcon: false,
+                isNarrow
+                    ? Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          SizedBox(
+                            width: screenWidth - 36,
+                            child: _premiumKPICard(
+                              title: "Total Assets",
+                              value: _formatCurrency(totalAssets),
+                              change: assetsChange,
+                              isCurrency: true,
+                              comparisonCaption: compareCap,
+                              borderColor:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Colors.white.withValues(alpha: 0.15)
+                                  : Colors.black12,
+                              borderWidth: 0.8,
+                              showInfoIcon: false,
+                            ),
+                          ),
+                          SizedBox(
+                            width: screenWidth - 36,
+                            child: _premiumKPICard(
+                              title: "Total Liabilities",
+                              value: _formatCurrency(totalLiabilities),
+                              change: liabilitiesChange,
+                              isCurrency: true,
+                              comparisonCaption: compareCap,
+                              borderColor:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Colors.white.withValues(alpha: 0.15)
+                                  : Colors.black12,
+                              borderWidth: 0.8,
+                            ),
+                          ),
+                          SizedBox(
+                            width: screenWidth - 36,
+                            child: _premiumKPICard(
+                              title: "Equity",
+                              value: _formatCurrency(totalEquity),
+                              change: equityChange,
+                              isCurrency: true,
+                              comparisonCaption: compareCap,
+                              borderColor:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Colors.white.withValues(alpha: 0.15)
+                                  : Colors.black12,
+                              borderWidth: 0.8,
+                            ),
+                          ),
+                        ],
+                      )
+                    : IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _premiumKPICard(
+                                title: "Total Assets",
+                                value: _formatCurrency(totalAssets),
+                                change: assetsChange,
+                                isCurrency: true,
+                                comparisonCaption: compareCap,
+                                borderColor:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.white.withValues(alpha: 0.15)
+                                    : Colors.black12,
+                                borderWidth: 0.8,
+                                showInfoIcon: false,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _premiumKPICard(
+                                title: "Total Liabilities",
+                                value: _formatCurrency(totalLiabilities),
+                                change: liabilitiesChange,
+                                isCurrency: true,
+                                comparisonCaption: compareCap,
+                                borderColor:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.white.withValues(alpha: 0.15)
+                                    : Colors.black12,
+                                borderWidth: 0.8,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _premiumKPICard(
+                                title: "Equity",
+                                value: _formatCurrency(totalEquity),
+                                change: equityChange,
+                                isCurrency: true,
+                                comparisonCaption: compareCap,
+                                borderColor:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.white.withValues(alpha: 0.15)
+                                    : Colors.black12,
+                                borderWidth: 0.8,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _premiumKPICard(
-                          title: "Total Liabilities",
-                          value: _formatCurrency(totalLiabilities),
-                          change: liabilitiesChange,
-                          isCurrency: true,
-                          comparisonCaption: compareCap,
-                          borderColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.15) : Colors.black12,
-                          borderWidth: 0.8,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _premiumKPICard(
-                          title: "Equity",
-                          value: _formatCurrency(totalEquity),
-                          change: equityChange,
-                          isCurrency: true,
-                          comparisonCaption: compareCap,
-                          borderColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.15) : Colors.black12,
-                          borderWidth: 0.8,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: 24),
 
                 // 🔹 Second Row: 4 Small Ratio Cards
-                isNarrow 
-                ? Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: screenWidth - 36,
-                      child: _premiumKPICard(
-                        title: "Current Ratio",
-                        value: currentRatioValue,
-                        change: currentRatioChange,
-                        isCurrency: false,
-                        comparisonCaption: compareCap,
-                        borderColor: Colors.yellow.withValues(alpha: 0.6),
-                        borderWidth: 1.5,
-                      ),
-                    ),
-                    SizedBox(
-                      width: screenWidth - 36,
-                      child: _premiumKPICard(
-                        title: "Debt / Equity Ratio",
-                        value: debtToEquityValue,
-                        change: debtToEquityChange,
-                        isCurrency: false,
-                        comparisonCaption: compareCap,
-                        borderColor: Colors.yellow.withValues(alpha: 0.6),
-                        borderWidth: 1.5,
-                      ),
-                    ),
-                    SizedBox(
-                      width: screenWidth - 36,
-                      child: _premiumKPICard(
-                        title: "Return on Equity (ROE)",
-                        value: roeValue,
-                        change: roeChange,
-                        isCurrency: false,
-                        comparisonCaption: compareCap,
-                        borderColor: Colors.yellow.withValues(alpha: 0.6),
-                        borderWidth: 1.5,
-                      ),
-                    ),
-                    SizedBox(
-                      width: screenWidth - 36,
-                      child: _premiumKPICard(
-                        title: "Total Assets",
-                        value: _formatCurrency(totalAssets),
-                        change: assetsChange,
-                        isCurrency: true,
-                        comparisonCaption: compareCap,
-                        borderColor: Colors.yellow.withValues(alpha: 0.6),
-                        borderWidth: 1.5,
-                      ),
-                    ),
-                  ],
-                )
-                : IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: _premiumKPICard(
-                          title: "Current Ratio",
-                          value: currentRatioValue,
-                          change: currentRatioChange,
-                          isCurrency: false,
-                          comparisonCaption: compareCap,
-                          borderColor: Colors.yellow.withValues(alpha: 0.6),
-                          borderWidth: 1.5,
+                isNarrow
+                    ? Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          SizedBox(
+                            width: screenWidth - 36,
+                            child: _premiumKPICard(
+                              title: "Current Ratio",
+                              value: currentRatioValue,
+                              change: currentRatioChange,
+                              isCurrency: false,
+                              comparisonCaption: compareCap,
+                              borderColor: Colors.yellow.withValues(alpha: 0.6),
+                              borderWidth: 1.5,
+                            ),
+                          ),
+                          SizedBox(
+                            width: screenWidth - 36,
+                            child: _premiumKPICard(
+                              title: "Debt / Equity Ratio",
+                              value: debtToEquityValue,
+                              change: debtToEquityChange,
+                              isCurrency: false,
+                              comparisonCaption: compareCap,
+                              borderColor: Colors.yellow.withValues(alpha: 0.6),
+                              borderWidth: 1.5,
+                            ),
+                          ),
+                          SizedBox(
+                            width: screenWidth - 36,
+                            child: _premiumKPICard(
+                              title: "Return on Equity (ROE)",
+                              value: roeValue,
+                              change: roeChange,
+                              isCurrency: false,
+                              comparisonCaption: compareCap,
+                              borderColor: Colors.yellow.withValues(alpha: 0.6),
+                              borderWidth: 1.5,
+                            ),
+                          ),
+                          SizedBox(
+                            width: screenWidth - 36,
+                            child: _premiumKPICard(
+                              title: "Total Assets",
+                              value: _formatCurrency(totalAssets),
+                              change: assetsChange,
+                              isCurrency: true,
+                              comparisonCaption: compareCap,
+                              borderColor: Colors.yellow.withValues(alpha: 0.6),
+                              borderWidth: 1.5,
+                            ),
+                          ),
+                        ],
+                      )
+                    : IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _premiumKPICard(
+                                title: "Current Ratio",
+                                value: currentRatioValue,
+                                change: currentRatioChange,
+                                isCurrency: false,
+                                comparisonCaption: compareCap,
+                                borderColor: Colors.yellow.withValues(
+                                  alpha: 0.6,
+                                ),
+                                borderWidth: 1.5,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _premiumKPICard(
+                                title: "Debt / Equity Ratio",
+                                value: debtToEquityValue,
+                                change: debtToEquityChange,
+                                isCurrency: false,
+                                comparisonCaption: compareCap,
+                                borderColor: Colors.yellow.withValues(
+                                  alpha: 0.6,
+                                ),
+                                borderWidth: 1.5,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _premiumKPICard(
+                                title: "Return on Equity (ROE)",
+                                value: roeValue,
+                                change: roeChange,
+                                isCurrency: false,
+                                comparisonCaption: compareCap,
+                                borderColor: Colors.yellow.withValues(
+                                  alpha: 0.6,
+                                ),
+                                borderWidth: 1.5,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _premiumKPICard(
+                                title: "Total Assets",
+                                value: _formatCurrency(totalAssets),
+                                change: assetsChange,
+                                isCurrency: true,
+                                comparisonCaption: compareCap,
+                                borderColor: Colors.yellow.withValues(
+                                  alpha: 0.6,
+                                ),
+                                borderWidth: 1.5,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _premiumKPICard(
-                          title: "Debt / Equity Ratio",
-                          value: debtToEquityValue,
-                          change: debtToEquityChange,
-                          isCurrency: false,
-                          comparisonCaption: compareCap,
-                          borderColor: Colors.yellow.withValues(alpha: 0.6),
-                          borderWidth: 1.5,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _premiumKPICard(
-                          title: "Return on Equity (ROE)",
-                          value: roeValue,
-                          change: roeChange,
-                          isCurrency: false,
-                          comparisonCaption: compareCap,
-                          borderColor: Colors.yellow.withValues(alpha: 0.6),
-                          borderWidth: 1.5,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _premiumKPICard(
-                          title: "Total Assets",
-                          value: _formatCurrency(totalAssets),
-                          change: assetsChange,
-                          isCurrency: true,
-                          comparisonCaption: compareCap,
-                          borderColor: Colors.yellow.withValues(alpha: 0.6),
-                          borderWidth: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: 24),
 
                 // 🔹 Bottom Section: Side-by-Side Breakdown
                 IntrinsicHeight(
-                  child: isNarrow 
-                   ? Column(
-                      children: [
-                        _buildBreakdownPanel(
-                          title: "Assets",
-                          sections: [
-                            _BreakdownSection(title: "Current Assets", items: controller.currentAssetsBreakdown),
-                            _BreakdownSection(title: "Fixed Assets", items: controller.fixedAssetsBreakdown),
-                            _BreakdownSection(title: "Other Assets", items: controller.otherAssetsBreakdown),
-                          ],
-                          total: totalAssets,
-                        ),
-                        const SizedBox(height: 24),
-                        _buildBreakdownPanel(
-                          title: "Liabilities & Equity",
-                          sections: [
-                            _BreakdownSection(title: "Current Liabilities", items: controller.currentLiabilitiesBreakdown),
-                            _BreakdownSection(title: "Long Term Liabilities", items: controller.longTermLiabilitiesBreakdown),
-                            _BreakdownSection(
-                              title: "Equity",
-                              items: <String, double>{
-                                ...controller.ownerEquityBreakdown,
-                              },
+                  child: isNarrow
+                      ? Column(
+                          children: [
+                            _buildBreakdownPanel(
+                              title: "Assets",
+                              sections: [
+                                _BreakdownSection(
+                                  title: "Current Assets",
+                                  items: controller.currentAssetsBreakdown,
+                                ),
+                                _BreakdownSection(
+                                  title: "Fixed Assets",
+                                  items: controller.fixedAssetsBreakdown,
+                                ),
+                                _BreakdownSection(
+                                  title: "Other Assets",
+                                  items: controller.otherAssetsBreakdown,
+                                ),
+                              ],
+                              total: totalAssets,
+                            ),
+                            const SizedBox(height: 24),
+                            _buildBreakdownPanel(
+                              title: "Liabilities & Equity",
+                              sections: [
+                                _BreakdownSection(
+                                  title: "Current Liabilities",
+                                  items: controller.currentLiabilitiesBreakdown,
+                                ),
+                                _BreakdownSection(
+                                  title: "Long Term Liabilities",
+                                  items:
+                                      controller.longTermLiabilitiesBreakdown,
+                                ),
+                                _BreakdownSection(
+                                  title: "Equity",
+                                  items: <String, double>{
+                                    ...controller.ownerEquityBreakdown,
+                                  },
+                                ),
+                              ],
+                              total: totalLiabilities + totalEquity,
                             ),
                           ],
-                          total: totalLiabilities + totalEquity,
-                        ),
-                      ],
-                    )
-                   : Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: _buildBreakdownPanel(
-                          title: "Assets",
-                          sections: [
-                            _BreakdownSection(title: "Current Assets", items: controller.currentAssetsBreakdown),
-                            _BreakdownSection(title: "Fixed Assets", items: controller.fixedAssetsBreakdown),
-                            _BreakdownSection(title: "Other Assets", items: controller.otherAssetsBreakdown),
-                          ],
-                          total: totalAssets,
-                        ),
-                      ),
-                      const SizedBox(width: 24),
-                      Expanded(
-                        child: _buildBreakdownPanel(
-                          title: "Liabilities & Equity",
-                          sections: [
-                            _BreakdownSection(title: "Current Liabilities", items: controller.currentLiabilitiesBreakdown),
-                            _BreakdownSection(title: "Long Term Liabilities", items: controller.longTermLiabilitiesBreakdown),
-                            _BreakdownSection(
-                              title: "Equity",
-                              items: <String, double>{
-                                ...controller.ownerEquityBreakdown,
-                              },
+                        )
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _buildBreakdownPanel(
+                                title: "Assets",
+                                sections: [
+                                  _BreakdownSection(
+                                    title: "Current Assets",
+                                    items: controller.currentAssetsBreakdown,
+                                  ),
+                                  _BreakdownSection(
+                                    title: "Fixed Assets",
+                                    items: controller.fixedAssetsBreakdown,
+                                  ),
+                                  _BreakdownSection(
+                                    title: "Other Assets",
+                                    items: controller.otherAssetsBreakdown,
+                                  ),
+                                ],
+                                total: totalAssets,
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: _buildBreakdownPanel(
+                                title: "Liabilities & Equity",
+                                sections: [
+                                  _BreakdownSection(
+                                    title: "Current Liabilities",
+                                    items:
+                                        controller.currentLiabilitiesBreakdown,
+                                  ),
+                                  _BreakdownSection(
+                                    title: "Long Term Liabilities",
+                                    items:
+                                        controller.longTermLiabilitiesBreakdown,
+                                  ),
+                                  _BreakdownSection(
+                                    title: "Equity",
+                                    items: <String, double>{
+                                      ...controller.ownerEquityBreakdown,
+                                    },
+                                  ),
+                                ],
+                                total: totalLiabilities + totalEquity,
+                              ),
                             ),
                           ],
-                          total: totalLiabilities + totalEquity,
                         ),
-                      ),
-                    ],
-                  ),
                 ),
                 const RecentDocumentsWidget(
                   type: 'bs',
@@ -1886,14 +2124,12 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
     // Collect all items from all sections for the Pie Chart (Top 5 Overall)
     Map<String, double> allItems = {};
     for (var section in sections) {
-       allItems.addAll(section.items);
+      allItems.addAll(section.items);
     }
 
-    final sortedItems = allItems.entries
-        .where((e) => e.value != 0)
-        .toList()
+    final sortedItems = allItems.entries.where((e) => e.value != 0).toList()
       ..sort((a, b) => b.value.abs().compareTo(a.value.abs()));
-    
+
     final displayItems = sortedItems.take(5).toList();
     final bool hasData = sortedItems.isNotEmpty;
 
@@ -1912,7 +2148,9 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black12),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black12,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
@@ -1930,7 +2168,12 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  AppText(title, fontSize: 18, fontWeight: FontWeight.w900, color: isDark ? Colors.white : Colors.black87),
+                  AppText(
+                    title,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
                   const SizedBox(height: 4),
                   AppText(
                     "As of ${DateFormat('MMM dd, yyyy').format(_asOfDate)}",
@@ -1939,7 +2182,12 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                   ),
                 ],
               ),
-              AppText(_formatCurrency(total), fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.black87),
+              AppText(
+                _formatCurrency(total),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
             ],
           ),
           const SizedBox(height: 32),
@@ -1950,9 +2198,17 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.pie_chart_outline, size: 48, color: isDark ? Colors.white24 : Colors.black12),
+                    Icon(
+                      Icons.pie_chart_outline,
+                      size: 48,
+                      color: isDark ? Colors.white24 : Colors.black12,
+                    ),
                     const SizedBox(height: 12),
-                    AppText("No Data Available", color: isDark ? Colors.white30 : Colors.black38, fontSize: 13),
+                    AppText(
+                      "No Data Available",
+                      color: isDark ? Colors.white30 : Colors.black38,
+                      fontSize: 13,
+                    ),
                   ],
                 ),
               ),
@@ -1991,30 +2247,42 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
                           children: [
                             const SizedBox(height: 8),
                             ...sections.map<Widget>((section) {
-                              if (section.items.isEmpty) return const SizedBox.shrink();
-                              
+                              if (section.items.isEmpty)
+                                return const SizedBox.shrink();
+
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Padding(
-                                    padding: const EdgeInsets.only(top: 12, bottom: 6),
+                                    padding: const EdgeInsets.only(
+                                      top: 12,
+                                      bottom: 6,
+                                    ),
                                     child: Text(
                                       section.title.toUpperCase(),
                                       style: TextStyle(
                                         fontFamily: 'Outfit',
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
-                                        color: orangeColor.withValues(alpha: 0.7),
+                                        color: orangeColor.withValues(
+                                          alpha: 0.7,
+                                        ),
                                       ),
                                       softWrap: false,
                                       overflow: TextOverflow.visible,
                                     ),
                                   ),
                                   ...section.items.entries.map((e) {
-                                    final pct = total != 0 ? (e.value.abs() / total.abs()) * 100 : 0.0;
-                                    int index = allItems.keys.toList().indexOf(e.key);
+                                    final pct = total != 0
+                                        ? (e.value.abs() / total.abs()) * 100
+                                        : 0.0;
+                                    int index = allItems.keys.toList().indexOf(
+                                      e.key,
+                                    );
                                     return _buildLegendItem(
-                                      e.key.contains(']') ? e.key.split(']').last.trim() : e.key,
+                                      e.key.contains(']')
+                                          ? e.key.split(']').last.trim()
+                                          : e.key,
                                       "${pct.toStringAsFixed(0)}%",
                                       palette[index % palette.length],
                                     );
@@ -2052,7 +2320,12 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
             ),
           ),
           const SizedBox(width: 24), // Restored internal space
-          AppText(percent, fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white70),
+          AppText(
+            percent,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Colors.white70,
+          ),
           const SizedBox(width: 4),
           Container(
             width: 6,
@@ -2068,26 +2341,39 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 6, height: 6, decoration: BoxDecoration(color: color.withValues(alpha: 0.5), shape: BoxShape.circle)),
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.5),
+            shape: BoxShape.circle,
+          ),
+        ),
         const SizedBox(width: 6),
         AppText(label, fontSize: 11, color: Colors.white30),
       ],
     );
   }
 
-  Widget _buildBreakdownRow({required String label, required double value, required double total}) {
-    final double percentage = total != 0 ? (value.abs() / total.abs()) * 100 : 0;
+  Widget _buildBreakdownRow({
+    required String label,
+    required double value,
+    required double total,
+  }) {
+    final double percentage = total != 0
+        ? (value.abs() / total.abs()) * 100
+        : 0;
     final bool isNegative = value < 0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          Expanded(
-            child: AppText(label, fontSize: 13, color: Colors.white70),
-          ),
+          Expanded(child: AppText(label, fontSize: 13, color: Colors.white70)),
           AppText(
-            isNegative ? "(${_formatCurrency(value.abs())})" : _formatCurrency(value),
+            isNegative
+                ? "(${_formatCurrency(value.abs())})"
+                : _formatCurrency(value),
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: isNegative ? Colors.redAccent : Colors.white,
@@ -2125,8 +2411,8 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
       ].where((e) => e.isNotEmpty).join(', ');
       final exportService = PdfExportService();
       final exportEnd = DateTime(asOfDate.year, asOfDate.month, asOfDate.day);
-      final exportStart = request?.startDate ??
-          DateTime(exportEnd.year, exportEnd.month, 1);
+      final exportStart =
+          request?.startDate ?? DateTime(exportEnd.year, exportEnd.month, 1);
       final exportViewType = request?.viewType ?? PdfViewType.monthly;
       final List<DateTime> columnEnds;
       final List<String> displayLabels;
@@ -2192,9 +2478,8 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         return total;
       }
 
-      String monthKey(DateTime d) => DateFormat(
-        'yyyy-MM',
-      ).format(DateTime(d.year, d.month, 1));
+      String monthKey(DateTime d) =>
+          DateFormat('yyyy-MM').format(DateTime(d.year, d.month, 1));
 
       List<DateTime> buildBucketStarts() {
         switch (exportViewType) {
@@ -2233,13 +2518,14 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
           switch (exportViewType) {
             PdfViewType.monthly => [monthKey(start)],
             PdfViewType.quarterly => [
-                monthKey(start),
-                monthKey(DateTime(start.year, start.month + 1, 1)),
-                monthKey(DateTime(start.year, start.month + 2, 1)),
-              ],
+              monthKey(start),
+              monthKey(DateTime(start.year, start.month + 1, 1)),
+              monthKey(DateTime(start.year, start.month + 2, 1)),
+            ],
             PdfViewType.yearly => [
-                for (int m = 1; m <= 12; m++) monthKey(DateTime(start.year, m, 1)),
-              ],
+              for (int m = 1; m <= 12; m++)
+                monthKey(DateTime(start.year, m, 1)),
+            ],
           },
       ];
 
@@ -2322,16 +2608,26 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
       for (int i = 0; i < yearCount; i++) {
         if (useEngineColumns) {
           final m = _balanceSheetMetricsAt(controller, columnEnds[i]);
-          final curAssets =
-              m.currentAssetsBreakdown.values.fold(0.0, (a, b) => a + b);
-          final fixedAssets =
-              m.fixedAssetsBreakdown.values.fold(0.0, (a, b) => a + b);
-          final otherAssets =
-              m.otherAssetsBreakdown.values.fold(0.0, (a, b) => a + b);
-          final curLiab =
-              m.currentLiabilitiesBreakdown.values.fold(0.0, (a, b) => a + b);
-          final longLiab =
-              m.longTermLiabilitiesBreakdown.values.fold(0.0, (a, b) => a + b);
+          final curAssets = m.currentAssetsBreakdown.values.fold(
+            0.0,
+            (a, b) => a + b,
+          );
+          final fixedAssets = m.fixedAssetsBreakdown.values.fold(
+            0.0,
+            (a, b) => a + b,
+          );
+          final otherAssets = m.otherAssetsBreakdown.values.fold(
+            0.0,
+            (a, b) => a + b,
+          );
+          final curLiab = m.currentLiabilitiesBreakdown.values.fold(
+            0.0,
+            (a, b) => a + b,
+          );
+          final longLiab = m.longTermLiabilitiesBreakdown.values.fold(
+            0.0,
+            (a, b) => a + b,
+          );
           final cash = m.currentAssetsBreakdown['Cash'] ?? 0;
           final ar = m.currentAssetsBreakdown['Accounts Receivable'] ?? 0;
           final inventory = m.currentAssetsBreakdown['Inventory'] ?? 0;
@@ -2459,10 +2755,9 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         final arNow = pickByKeywords(controller.currentAssetsBreakdown, [
           'receivable',
         ]);
-        final inventoryNow = pickByKeywords(
-          controller.currentAssetsBreakdown,
-          ['inventory'],
-        );
+        final inventoryNow = pickByKeywords(controller.currentAssetsBreakdown, [
+          'inventory',
+        ]);
         final rawDepNow = pickByKeywords(controller.fixedAssetsBreakdown, [
           'depreciation',
           'amortization',
@@ -2538,20 +2833,41 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
       page.graphics.drawString(
         'BALANCE SHEET',
         titleFont,
-        bounds: Rect.fromLTWH(contentX + (contentWidth * 0.58), 15, contentWidth * 0.40, 16),
-        format: pdf_gen.PdfStringFormat(alignment: pdf_gen.PdfTextAlignment.right),
+        bounds: Rect.fromLTWH(
+          contentX + (contentWidth * 0.58),
+          15,
+          contentWidth * 0.40,
+          16,
+        ),
+        format: pdf_gen.PdfStringFormat(
+          alignment: pdf_gen.PdfTextAlignment.right,
+        ),
       );
       page.graphics.drawString(
         'Date Prepared: ${DateFormat('MMMM dd, yyyy').format(DateTime.now())}',
         smallFont,
-        bounds: Rect.fromLTWH(contentX + (contentWidth * 0.58), 27, contentWidth * 0.40, 9),
-        format: pdf_gen.PdfStringFormat(alignment: pdf_gen.PdfTextAlignment.right),
+        bounds: Rect.fromLTWH(
+          contentX + (contentWidth * 0.58),
+          27,
+          contentWidth * 0.40,
+          9,
+        ),
+        format: pdf_gen.PdfStringFormat(
+          alignment: pdf_gen.PdfTextAlignment.right,
+        ),
       );
       page.graphics.drawString(
         'As of ${DateFormat('MMMM dd').format(asOfDate)}',
         subtitleFont,
-        bounds: Rect.fromLTWH(contentX + (contentWidth * 0.58), 35, contentWidth * 0.40, 10),
-        format: pdf_gen.PdfStringFormat(alignment: pdf_gen.PdfTextAlignment.right),
+        bounds: Rect.fromLTWH(
+          contentX + (contentWidth * 0.58),
+          35,
+          contentWidth * 0.40,
+          10,
+        ),
+        format: pdf_gen.PdfStringFormat(
+          alignment: pdf_gen.PdfTextAlignment.right,
+        ),
       );
       page.graphics.drawLine(
         pdf_gen.PdfPen(pdf_gen.PdfColor(223, 229, 237), width: 0.4),
@@ -2607,7 +2923,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         bool shaded = false,
         bool indent = false,
       }) {
-          final row = grid.rows.add();
+        final row = grid.rows.add();
         row.cells[0].value = indent ? '      $label' : label;
         for (int i = 0; i < yearCount; i++) {
           row.cells[1 + i].value = amountText(values[i]);
@@ -2685,7 +3001,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         for (int i = 0; i < yearCount; i++) {
           row.cells[1 + i].value = displayLabels[i];
           row.cells[1 + i].style = pdf_gen.PdfGridCellStyle(
-          format: pdf_gen.PdfStringFormat(
+            format: pdf_gen.PdfStringFormat(
               alignment: pdf_gen.PdfTextAlignment.right,
               lineAlignment: pdf_gen.PdfVerticalAlignment.middle,
             ),
@@ -2758,11 +3074,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         List<double>.filled(yearCount, 0),
         indent: true,
       );
-      addTemplateRow(
-        'Property, Plant, and Equipment',
-        ppeVals,
-        indent: true,
-      );
+      addTemplateRow('Property, Plant, and Equipment', ppeVals, indent: true);
       addTemplateRow(
         'Intangible Assets',
         List<double>.filled(yearCount, 0),
@@ -2798,12 +3110,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         bold: true,
         shaded: true,
       );
-      addTemplateRow(
-        'TOTAL ASSETS',
-        totalAssetsVals,
-        bold: true,
-        shaded: true,
-      );
+      addTemplateRow('TOTAL ASSETS', totalAssetsVals, bold: true, shaded: true);
       addPdfSectionGap();
 
       addHeaderRow("LIABILITIES AND OWNER'S EQUITY");
@@ -2812,11 +3119,7 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         List<double>.filled(yearCount, 0),
         bold: true,
       );
-      addTemplateRow(
-        'Accounts Payable',
-        currentLiabilitiesVals,
-        indent: true,
-      );
+      addTemplateRow('Accounts Payable', currentLiabilitiesVals, indent: true);
       addTemplateRow(
         'Short-Term Loans',
         List<double>.filled(yearCount, 0),
@@ -2900,7 +3203,12 @@ class _BalanceSheetTabState extends State<BalanceSheetTab>
         shaded: true,
       );
       grid.style = pdf_gen.PdfGridStyle(
-        cellPadding: pdf_gen.PdfPaddings(left: 1, right: 1, top: 3.6, bottom: 3.6),
+        cellPadding: pdf_gen.PdfPaddings(
+          left: 1,
+          right: 1,
+          top: 3.6,
+          bottom: 3.6,
+        ),
       );
       grid.draw(
         page: page,

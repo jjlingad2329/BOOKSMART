@@ -1,4 +1,4 @@
-import 'package:booksmart/modules/user/ui/stripe/add_new_card_scree.dart';
+import 'package:booksmart/modules/user/ui/stripe/add_new_card_screen.dart';
 import 'package:booksmart/widgets/custom_dialog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';

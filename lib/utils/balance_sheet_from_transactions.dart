@@ -1,3 +1,5 @@
+// ignore_for_file: unused_local_variable
+
 import 'package:booksmart/models/transaction_model.dart';
 
 /// Calendar date only (local components of [d]).
@@ -27,9 +29,7 @@ List<TransactionModel> bsTransactionsThrough(
   DateTime throughDay,
 ) {
   final end = bsDateOnly(throughDay);
-  return all
-      .where((t) => !bsDateOnly(t.dateTime).isAfter(end))
-      .toList();
+  return all.where((t) => !bsDateOnly(t.dateTime).isAfter(end)).toList();
 }
 
 const List<String> _bsExpenseKeywords = <String>[
@@ -147,7 +147,13 @@ class BalanceSheetLineMetrics {
           dep += amt;
         }
       }
-      return {'income': inc, 'expense': exp, 'cogs': cg, 'opex': opx, 'dep': dep};
+      return {
+        'income': inc,
+        'expense': exp,
+        'cogs': cg,
+        'opex': opx,
+        'dep': dep,
+      };
     }
 
     final cT = getTotals(transactions);
@@ -244,7 +250,8 @@ class BalanceSheetLineMetrics {
 
       if (title.startsWith('[revenue]')) {
         isIncome = true;
-      } else if (title.startsWith('[cogs]') || title.contains('cost of goods')) {
+      } else if (title.startsWith('[cogs]') ||
+          title.contains('cost of goods')) {
         isExpense = true;
         isCogs = true;
       } else if (title.startsWith('[opex]')) {
@@ -328,23 +335,32 @@ class BalanceSheetLineMetrics {
         operatingCashFlow + investingCashFlow + financingCashFlow;
     final endingCashBalance = openingCash + netChangeInCash;
 
-    final computedCashForBsRaw =
-        cashTotal.abs() > 0.0001 ? cashTotal : endingCashBalance;
+    final computedCashForBsRaw = cashTotal.abs() > 0.0001
+        ? cashTotal
+        : endingCashBalance;
     // Keep cash non-negative on the balance sheet; route negative cash to a
     // short-term overdraft liability line instead.
-    final overdraftLiability =
-        computedCashForBsRaw < 0 ? computedCashForBsRaw.abs() : 0.0;
-    final computedCashForBs = computedCashForBsRaw < 0 ? 0.0 : computedCashForBsRaw;
+    final overdraftLiability = computedCashForBsRaw < 0
+        ? computedCashForBsRaw.abs()
+        : 0.0;
+    final computedCashForBs = computedCashForBsRaw < 0
+        ? 0.0
+        : computedCashForBsRaw;
     final retainedEarnings = netIncome;
 
     final currentAssetsBreakdown = <String, double>{
-      if (taggedCurrentAssetsTotal > 0) 'Current Assets': taggedCurrentAssetsTotal,
+      if (taggedCurrentAssetsTotal > 0)
+        'Current Assets': taggedCurrentAssetsTotal,
       'Cash': computedCashForBs,
       'Accounts Receivable': arTotal,
       if (inventoryTotal > 0) 'Inventory': inventoryTotal,
     };
-    final fixedAssetsBreakdown = <String, double>{'Fixed Assets': fixedAssetsTotal};
-    final otherAssetsBreakdown = <String, double>{'Other Assets': otherAssetsTotal};
+    final fixedAssetsBreakdown = <String, double>{
+      'Fixed Assets': fixedAssetsTotal,
+    };
+    final otherAssetsBreakdown = <String, double>{
+      'Other Assets': otherAssetsTotal,
+    };
     final currentLiabilitiesBreakdown = <String, double>{
       'Current Liabilities': curLiabTotal,
       if (overdraftLiability > 0) 'Bank Overdraft': overdraftLiability,
@@ -357,7 +373,8 @@ class BalanceSheetLineMetrics {
       'Retained Earnings': retainedEarnings,
     };
 
-    final totalAssets = computedCashForBs +
+    final totalAssets =
+        computedCashForBs +
         arTotal +
         inventoryTotal +
         fixedAssetsTotal +

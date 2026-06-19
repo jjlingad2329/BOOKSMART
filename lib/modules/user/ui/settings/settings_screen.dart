@@ -189,6 +189,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             goToCardListScreen();
           }),
           const SizedBox(height: 10),
+          buildTile("Subscription", () {
+            Get.toNamed(Routes.subscription);
+          }),
+          const SizedBox(height: 10),
 
           buildTile("Delete Account", () {}, isDestructive: false),
           const SizedBox(height: 10),

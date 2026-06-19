@@ -289,7 +289,6 @@ Future<ResponseModel> getStripeSubscriptionPlans() async {
         headers: {
           'Authorization':
               'Bearer ${supabase.auth.currentSession?.accessToken}',
-
           'Content-Type': 'application/json',
         },
       )
@@ -300,10 +299,35 @@ Future<ResponseModel> getStripeSubscriptionPlans() async {
 
         Map<String, dynamic> data = jsonDecode(response.bodyString ?? '{}');
 
-        List<dynamic> plansList = data["plans"];
+        if (!response.isOk) {
+          return ResponseModel.error(
+            error: data['error'] ?? 'Unable to load subscription plans.',
+            statusCode: response.statusCode,
+          );
+        }
+
+        final rawPlans = data["plans"] ?? data["data"];
+
+        if (rawPlans is! List) {
+          return ResponseModel.error(
+            error: 'Subscription plans response is invalid.',
+            statusCode: response.statusCode,
+          );
+        }
+
+        if (rawPlans.isNotEmpty && rawPlans.first is Map) {
+          final firstPlan = rawPlans.first as Map;
+          if (firstPlan['object'] == 'payment_method') {
+            return ResponseModel.error(
+              error:
+                  'Loaded saved cards instead of subscription plans. Please check the get-subscription-plans endpoint.',
+              statusCode: response.statusCode,
+            );
+          }
+        }
 
         return ResponseModel.value(
-          plansList.map((e) {
+          rawPlans.where((e) => e is Map && e['prices'] is List).map((e) {
             return StripePlan.fromJson(e);
           }).toList(),
           response.statusCode,

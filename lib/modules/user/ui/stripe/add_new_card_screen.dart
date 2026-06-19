@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:get/get.dart';
 
+import '../../../../widgets/loading.dart';
+import '../../../../widgets/snackbar.dart';
 import '../../controllers/stripe_card_controller.dart';
 
 void goToAddNewCardScreen({bool shouldCloseBefore = false}) {
@@ -94,6 +96,7 @@ class _AddCardScreenState extends State<AddCardScreen> {
 
   Future<void> _addCard() async {
     try {
+      showLoading();
       final setupIntentResponse = await handleStripeCardManagement(
         action: StripeCardAction.create_setup_intent,
       );
@@ -106,21 +109,16 @@ class _AddCardScreenState extends State<AddCardScreen> {
           paymentMethodData: PaymentMethodData(),
         ),
       );
+      dismissLoadingWidget();
 
-      Get.back();
-
-      Get.snackbar(
-        "Success",
-        "Card added successfully",
-        snackPosition: SnackPosition.BOTTOM,
-      );
-
+      Get.back(); // close the add card screen
+      showSnackBar("Card added successfully");
       Get.find<StripeCardController>().loadCards();
     } catch (e, x) {
+      dismissLoadingWidget();
       log(e.toString());
       log(x.toString());
-
-      Get.snackbar("Error", e.toString(), snackPosition: SnackPosition.BOTTOM);
+      showSnackBar(e.toString(), title: "Error", isError: true);
     }
   }
 }
