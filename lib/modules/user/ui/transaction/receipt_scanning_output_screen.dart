@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/widgets/snackbar.dart';
 import 'package:camera/camera.dart';

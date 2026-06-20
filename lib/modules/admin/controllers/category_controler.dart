@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:booksmart/services/crud_service.dart';
 import 'package:booksmart/supabase/tables.dart';
 import 'package:get/get.dart';

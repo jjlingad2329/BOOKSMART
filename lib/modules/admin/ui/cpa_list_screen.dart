@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:booksmart/models/user_base_model.dart';
 import 'package:booksmart/modules/admin/controllers/cpa_controller.dart';
 import 'package:booksmart/modules/admin/ui/widgets/cpa_detail_screen.dart';

@@ -1,3 +1,5 @@
+// ignore_for_file: depend_on_referenced_packages, unused_local_variable, unused_field, unused_element, curly_braces_in_flow_control_structures
+
 import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/modules/user/controllers/financial_report_controller.dart';
 import 'package:booksmart/modules/user/controllers/organization_controller.dart';

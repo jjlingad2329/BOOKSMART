@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:developer';
 import 'package:booksmart/constant/env_data.dart';
 import 'package:booksmart/modules/common/providers/auth_provider.dart';

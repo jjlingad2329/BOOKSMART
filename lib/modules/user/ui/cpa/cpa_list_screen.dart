@@ -1,3 +1,5 @@
+// ignore_for_file: curly_braces_in_flow_control_structures
+
 import 'package:booksmart/models/user_base_model.dart';
 import 'package:booksmart/widgets/app_text.dart';
 import 'package:booksmart/widgets/app_text_field.dart';

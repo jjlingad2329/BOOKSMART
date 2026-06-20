@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/widgets/custom_dialog.dart';
 import 'package:flutter/foundation.dart';

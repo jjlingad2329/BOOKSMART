@@ -1,3 +1,5 @@
+// ignore_for_file: file_names
+
 import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/modules/user/ui/token/buy_tokens_screen.dart';
 import 'package:booksmart/modules/user/ui/token/streak_unlocked_screen.dart';

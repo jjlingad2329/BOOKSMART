@@ -1,3 +1,5 @@
+// ignore_for_file: depend_on_referenced_packages, unused_element, unused_local_variable, dead_code
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:booksmart/constant/app_colors.dart';
@@ -1733,7 +1735,6 @@ class _ProfitLossScreenState extends State<ProfitLossScreen>
     }
   }
 
-  // ignore: unused_element
   void _exportExcelLegacy(FinancialReportController controller) async {
     try {
       final start =

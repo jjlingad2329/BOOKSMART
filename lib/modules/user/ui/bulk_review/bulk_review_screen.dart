@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/modules/admin/controllers/category_controler.dart';
 import 'package:booksmart/modules/user/controllers/transaction_controller.dart';

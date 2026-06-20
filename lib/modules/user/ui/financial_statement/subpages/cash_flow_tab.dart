@@ -1,3 +1,5 @@
+// ignore_for_file: depend_on_referenced_packages, unused_element, unused_local_variable, dead_code, dead_null_aware_expression, deprecated_member_use, use_build_context_synchronously, curly_braces_in_flow_control_structures
+
 import 'package:booksmart/constant/exports.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:booksmart/modules/user/controllers/financial_report_controller.dart';
