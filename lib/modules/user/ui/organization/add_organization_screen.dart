@@ -8,7 +8,7 @@ import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import '../../../../widgets/custom_drop_down.dart';
-import 'business_details/tax_strategy_onboarding_stepper.dart';
+import 'business_details/business_survey_stepper.dart';
 
 void goToAddOrganizationScreen({
   bool shouldCloseBefore = false,
@@ -394,7 +394,7 @@ class _AddOrganizationScreenState extends State<AddOrganizationScreen> {
       final newId = await controller.addOrganizationAndReturnId(model);
       if (newId != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          goToTaxStrategyOnboarding(organizationId: newId);
+          goToBusinessSurvey(organizationId: newId);
         });
       }
     }

@@ -7,7 +7,8 @@ import 'package:get/get.dart';
 /// ─── Progress Bar ────────────────────────────────────────────────────────────
 class TaxProgressBar extends StatelessWidget {
   final int current;
-  const TaxProgressBar({super.key, required this.current});
+  final int total;
+  const TaxProgressBar({super.key, required this.current, this.total = 9});
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +21,7 @@ class TaxProgressBar extends StatelessWidget {
             Icon(Icons.flag_rounded, size: 16, color: colorScheme.primary),
             const SizedBox(width: 6),
             AppText(
-              'Step $current of 9',
+              'Step $current of $total',
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: colorScheme.primary,
@@ -31,7 +32,7 @@ class TaxProgressBar extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
-            value: current / 9,
+            value: current / total,
             minHeight: 6,
             backgroundColor: colorScheme.surfaceContainerHighest,
             color: colorScheme.primary,
@@ -203,6 +204,7 @@ class TaxInsightChip extends StatelessWidget {
 
 /// ─── Navigation Buttons ───────────────────────────────────────────────────────
 class TaxNavButtons extends StatelessWidget {
+  final VoidCallback? onBack;
   final VoidCallback onSkip;
   final VoidCallback onNext;
   final String nextLabel;
@@ -211,6 +213,7 @@ class TaxNavButtons extends StatelessWidget {
 
   const TaxNavButtons({
     super.key,
+    this.onBack,
     required this.onSkip,
     required this.onNext,
     this.nextLabel = 'Save & Next',
@@ -220,15 +223,32 @@ class TaxNavButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Get.theme.colorScheme;
     return Row(
       children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: isLoading ? null : onBack,
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              side: BorderSide(color: colorScheme.outline),
+              foregroundColor: colorScheme.onSurface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const AppText('Back', fontWeight: FontWeight.w500),
+          ),
+        ),
+        const SizedBox(width: 10),
         if (showSkip) ...[
           Expanded(
             child: OutlinedButton(
               onPressed: isLoading ? null : onSkip,
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                side: BorderSide(color: Get.theme.colorScheme.outline),
+                side: BorderSide(color: colorScheme.outline),
+                foregroundColor: colorScheme.onSurface,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -236,7 +256,7 @@ class TaxNavButtons extends StatelessWidget {
               child: const AppText('Skip', fontWeight: FontWeight.w500),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
         ],
         Expanded(
           flex: 2,
@@ -244,8 +264,8 @@ class TaxNavButtons extends StatelessWidget {
             onPressed: isLoading ? null : onNext,
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
-              backgroundColor: Get.theme.colorScheme.primary,
-              foregroundColor: Get.theme.colorScheme.onPrimary,
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -257,12 +277,12 @@ class TaxNavButtons extends StatelessWidget {
                     width: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Get.theme.colorScheme.onPrimary,
+                      color: colorScheme.onPrimary,
                     ),
                   )
                 : AppText(
                     nextLabel,
-                    color: Get.theme.colorScheme.onPrimary,
+                    color: colorScheme.onPrimary,
                     fontWeight: FontWeight.w600,
                   ),
           ),

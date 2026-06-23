@@ -4,7 +4,7 @@ import 'package:booksmart/widgets/confirmation_dialog.dart';
 import 'package:booksmart/widgets/custom_dialog.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'business_details/tax_strategy_onboarding_stepper.dart';
+import 'business_details/business_survey_stepper.dart';
 import 'add_organization_screen.dart';
 
 void goToOrganizationListScreen({bool shouldCloseBefore = false}) {
@@ -61,7 +61,7 @@ class OrganizationListScreen extends StatelessWidget {
                       IconButton(
                         icon: const Icon(Icons.edit_note, color: Colors.grey),
                         onPressed: () {
-                          goToTaxStrategyOnboarding(organizationId: org.id);
+                          goToBusinessSurvey(organizationId: org.id);
                         },
                       ),
                       IconButton(

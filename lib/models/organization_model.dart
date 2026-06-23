@@ -47,6 +47,8 @@ class OrganizationModel {
   final int? businessVehiclePercent;
   final int? businessUtilityPercent;
   final int? businessMealPercent;
+  final double? equipmentCost;
+  final Map<String, dynamic>? debts;
 
   OrganizationModel({
     required this.id,
@@ -91,6 +93,8 @@ class OrganizationModel {
     this.businessVehiclePercent,
     this.businessUtilityPercent,
     this.businessMealPercent,
+    this.equipmentCost,
+    this.debts,
   });
 
   factory OrganizationModel.fromJson(Map<String, dynamic> json) {
@@ -145,6 +149,8 @@ class OrganizationModel {
       businessVehiclePercent: json['business_vehicle_percent'],
       businessUtilityPercent: json['business_utility_percent'],
       businessMealPercent: json['business_meal_percent'],
+      equipmentCost: handleResponseFromJson<double?>(json, 'equipment_cost'),
+      debts: _parseMap(json['debts']),
     );
   }
 
@@ -192,12 +198,22 @@ class OrganizationModel {
       'business_vehicle_percent': businessVehiclePercent,
       'business_utility_percent': businessUtilityPercent,
       'business_meal_percent': businessMealPercent,
+      'equipment_cost': equipmentCost,
+      'debts': debts,
     };
   }
 
   static List<String>? _parseList(dynamic data) {
     if (data == null) return null;
     if (data is List) return data.map((e) => e.toString()).toList();
+    return null;
+  }
+
+  static Map<String, dynamic>? _parseMap(dynamic data) {
+    if (data == null) return null;
+    if (data is Map) {
+      return data.map((key, value) => MapEntry(key.toString(), value));
+    }
     return null;
   }
 
@@ -237,6 +253,8 @@ class OrganizationModel {
       'business_vehicle_percent': businessVehiclePercent,
       'business_utility_percent': businessUtilityPercent,
       'business_meal_percent': businessMealPercent,
+      'equipment_cost': equipmentCost,
+      'debts': debts,
     };
   }
 }
