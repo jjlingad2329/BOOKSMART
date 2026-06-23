@@ -75,6 +75,12 @@ class WebSideBarAdmin extends StatelessWidget {
                         isShowName: isShowName,
                       ),
                       SideBarIcon(
+                        icon: Icons.receipt_long_outlined,
+                        infoMessage: 'Tax Rules',
+                        routeName: Routes.adminTaxDeductions,
+                        isShowName: isShowName,
+                      ),
+                      SideBarIcon(
                         icon: Icons.chat_bubble_outline,
                         infoMessage: 'Chat',
                         routeName: Routes.adminChat,

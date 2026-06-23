@@ -2,6 +2,7 @@ import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/modules/admin/ui/categories_screen.dart';
 import 'package:booksmart/modules/admin/ui/cpa_list_screen.dart';
 import 'package:booksmart/modules/admin/ui/dashboard_screen.dart';
+import 'package:booksmart/modules/admin/ui/tax_deduction_rules_screen.dart';
 import 'package:booksmart/modules/admin/ui/user_list_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -33,6 +34,7 @@ class _HomeScreenAdminState extends State<HomeScreenAdmin> {
     {'icon': Icons.assessment, 'label': 'Users'},
     {'icon': Icons.business_outlined, 'label': 'CPAs'},
     {'icon': Icons.category_outlined, 'label': 'Categories'},
+    {'icon': Icons.receipt_long_outlined, 'label': 'Tax Rules'},
     {'icon': Icons.chat_bubble_outline, 'label': 'Chat'},
   ];
 
@@ -41,10 +43,18 @@ class _HomeScreenAdminState extends State<HomeScreenAdmin> {
     UserListScreen(),
     CpaListScreenAdmin(),
     AdminCategoriesScreen(),
+    const TaxDeductionRulesScreen(),
     const ChatListScreen(),
   ];
 
-  List<String?> pageTitles = [null, "Users", "CPAs", "Categories", "Chats"];
+  List<String?> pageTitles = [
+    null,
+    "Users",
+    "CPAs",
+    "Categories",
+    "Tax Rules",
+    "Chats",
+  ];
 
   @override
   Widget build(BuildContext context) {

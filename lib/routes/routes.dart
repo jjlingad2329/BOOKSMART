@@ -58,6 +58,7 @@ abstract class Routes {
   static const String adminUsers = '/admin/users';
   static const String adminCPAs = '/admin/cpas';
   static const String adminCategories = '/admin/categories';
+  static const String adminTaxDeductions = '/admin/tax-deductions';
   static const String adminSettings = '/admin/settings';
   static const String adminChat = '/admin/chat';
 }

@@ -19,6 +19,8 @@ class DeductionResult {
   final double stateDeduction;
   final double federalDeduction;
   final double? deductionRate; // null when tiered rule
+  final String? stateDeductionRate;
+  final String? federalDeductionRate;
   final Color color;
 
   DeductionResult({
@@ -29,6 +31,8 @@ class DeductionResult {
     required this.stateDeduction,
     required this.federalDeduction,
     required this.deductionRate,
+    this.stateDeductionRate,
+    this.federalDeductionRate,
     required this.color,
   });
 
@@ -38,18 +42,41 @@ class DeductionResult {
     String subCategoryName,
   ) {
     return DeductionResult(
-      subCategoryId: map['sub_category_id'] as int,
+      subCategoryId: _readInt(map, 'sub_category_id') ?? 0,
       subCategoryName: subCategoryName,
-      totalAmount: (map['total_amount'] ?? 0).toDouble(),
-      transactionCount: (map['transaction_count'] ?? 0).toInt(),
-      stateDeduction: (map['state_deduction'] ?? 0).toDouble(),
-      federalDeduction: (map['federal_deduction'] ?? 0).toDouble(),
-      deductionRate: map['deduction_rate'] != null
-          ? (map['deduction_rate']).toDouble()
-          : null,
+      totalAmount: _readDouble(map, 'total_amount') ?? 0,
+      transactionCount: _readInt(map, 'transaction_count') ?? 0,
+      stateDeduction: _readDouble(map, 'state_deduction') ?? 0,
+      federalDeduction: _readDouble(map, 'federal_deduction') ?? 0,
+      deductionRate: _readDouble(map, 'deduction_rate'),
+      stateDeductionRate: _readString(map, 'state_deduction_rate'),
+      federalDeductionRate: _readString(map, 'federal_deduction_rate'),
       color: color,
     );
   }
+}
+
+dynamic _readValue(Map<String, dynamic> map, String key) {
+  return map[key] ?? map['out_$key'];
+}
+
+double? _readDouble(Map<String, dynamic> map, String key) {
+  final value = _readValue(map, key);
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value.toString());
+}
+
+int? _readInt(Map<String, dynamic> map, String key) {
+  final value = _readValue(map, key);
+  if (value == null) return null;
+  if (value is num) return value.toInt();
+  return int.tryParse(value.toString());
+}
+
+String? _readString(Map<String, dynamic> map, String key) {
+  final value = _readValue(map, key);
+  return value?.toString();
 }
 
 List<Color> _generateColors(int count) {
@@ -93,17 +120,16 @@ class DeductionController extends GetxController {
     isLoading.value = true;
     final rpcParams = {
       'p_org_id': organizationControllerInstance.currentOrganization?.id,
-      'p_state_id': organizationControllerInstance.currentOrganization?.stateId,
-      'p_start_date': startDate.toIso8601String(),
-      'p_end_date': endDate.toIso8601String(),
+      'p_start_date': startDate.toIso8601String().split('T').first,
+      'p_end_date': endDate.toIso8601String().split('T').first,
     };
 
     final dynamic response = await supabase.rpc(
-      'calculate_deductions',
+      'get_tax_deductions',
       params: rpcParams,
     );
 
-    log("RPC: calculate_deductions: $response");
+    log("RPC: get_tax_deductions: $response");
     List<dynamic> groupedTransactions = response as List<dynamic>;
 
     // generate exactly N unique colors for N rows
@@ -116,7 +142,11 @@ class DeductionController extends GetxController {
         groupedTransactions[i] as Map<String, dynamic>,
         colors[i],
         Get.find<CategoryAdminController>().getSubCategoryName(
-          groupedTransactions[i]['sub_category_id'] as int,
+          _readInt(
+                groupedTransactions[i] as Map<String, dynamic>,
+                'sub_category_id',
+              ) ??
+              0,
         ),
       ),
     );

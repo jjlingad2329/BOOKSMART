@@ -15,6 +15,7 @@ class SupabaseTable {
   static String userDocuments = 'user_documents';
   static String documentAccessRequests = 'document_access_requests';
   static String states = 'states';
+  static String deductionRuleGroups = 'deduction_rule_groups';
   static String deductionRules = 'deduction_rules';
   static String aiTaxStrategies = 'ai_tax_strategies';
   static String aiChatMessages = 'ai_chat_messages';

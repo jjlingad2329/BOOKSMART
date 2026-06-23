@@ -86,17 +86,8 @@ void showSubCategoryListDialog(
               ...subCategories.map(
                 (sub) => ListTile(
                   onTap: () {
-                    controller.fetchStates();
-                    controller.fetchDeductionRules(
-                      categoryId: categoryId,
-                      subCategoryId: sub.id,
-                    );
-                    showDeductionRulesDialog(
-                      controller: controller,
-                      categoryId: categoryId,
-                      subCategoryId: sub.id,
-                      name: sub.name,
-                    );
+                    Get.back();
+                    Get.toNamed(Routes.adminTaxDeductions);
                   },
                   title: AppText(sub.name),
                   trailing: Row(

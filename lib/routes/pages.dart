@@ -24,6 +24,7 @@ import '../modules/admin/ui/categories_screen.dart';
 import '../modules/admin/ui/cpa_list_screen.dart';
 import '../modules/admin/ui/home/home_screen.dart';
 import '../modules/admin/ui/home/template/web_template.dart';
+import '../modules/admin/ui/tax_deduction_rules_screen.dart';
 import '../modules/admin/ui/user_list_screen.dart';
 import '../modules/common/ui/authentication/verify_email_screen.dart';
 import '../modules/common/ui/error_screen.dart';
@@ -64,8 +65,7 @@ class AppPages {
 
     GetPage(
       name: Routes.buyTokens,
-      page: () =>
-          getRequiredScreen(const TokenPurchaseScreen(), UserRole.user),
+      page: () => getRequiredScreen(const TokenPurchaseScreen(), UserRole.user),
     ),
     GetPage(
       name: Routes.streakUnlocked,
@@ -263,6 +263,15 @@ class AppPages {
         kIsWeb
             ? WebTemplateAdmin(child: AdminCategoriesScreen())
             : AdminCategoriesScreen(),
+        UserRole.admin,
+      ),
+    ),
+    GetPage(
+      name: Routes.adminTaxDeductions,
+      page: () => getRequiredScreen(
+        kIsWeb
+            ? WebTemplateAdmin(child: TaxDeductionRulesScreen())
+            : TaxDeductionRulesScreen(),
         UserRole.admin,
       ),
     ),

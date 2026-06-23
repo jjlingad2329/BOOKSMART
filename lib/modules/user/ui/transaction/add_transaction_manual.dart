@@ -21,14 +21,18 @@ import 'receipt_scanning_output_screen.dart';
 import '../../../../services/storage_service.dart';
 import '../../../../supabase/buckets.dart';
 
-
 void goToAddTransactionScreen({
   TransactionModel? transaction,
   bool shouldCloseBefore = false,
 }) {
   // Ensure the controller is registered before using it
-  if (!Get.isRegistered<TransactionController>()) {
-    Get.put(TransactionController());
+  if (!Get.isRegistered<TransactionController>(
+    tag: getCurrentOrganization!.id.toString(),
+  )) {
+    Get.put(
+      TransactionController(),
+      tag: getCurrentOrganization!.id.toString(),
+    );
   }
 
   if (kIsWeb) {
@@ -225,7 +229,10 @@ class _AddTransactionScreenManualState
       await transactionC.addTransaction(model);
     } else {
       // ── UPDATE existing transaction ──────────────────────────────────────
-      await transactionC.updateTransaction(data: model, id: widget.transaction!.id);
+      await transactionC.updateTransaction(
+        data: model,
+        id: widget.transaction!.id,
+      );
     }
   }
 
