@@ -2,7 +2,6 @@
 
 import 'package:booksmart/models/user_base_model.dart';
 import 'package:booksmart/widgets/app_text.dart';
-import 'package:booksmart/widgets/app_text_field.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -316,6 +315,9 @@ class _CpaListScreenState extends State<CpaListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Get.theme.colorScheme;
+    final isDark = Get.theme.brightness == Brightness.dark;
+
     return Scaffold(
       appBar: kIsWeb ? null : AppBar(title: const Text("CPAs")),
       body: GetBuilder<AdminCpaController>(
@@ -329,64 +331,98 @@ class _CpaListScreenState extends State<CpaListScreen> {
           final filteredCpas = _filterCpas(allCpas);
 
           return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 8,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // Search & Filter Header
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        AppText(
-                          "Top CPA Matches",
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const AppText(
+                              "CPA Network Directory",
+                              fontWeight: FontWeight.bold,
+                              fontSize: 22,
+                            ),
+                            const SizedBox(height: 4),
+                            AppText(
+                              isAnyActiveFilter || searchQuery.isNotEmpty
+                                  ? "Showing ${filteredCpas.length} of ${allCpas.length} verified CPAs that fit your preferences."
+                                  : "We found ${allCpas.length} verified CPAs that fit your preferences.",
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        AppText(
-                          isAnyActiveFilter || searchQuery.isNotEmpty
-                              ? "Showing ${filteredCpas.length} of ${allCpas.length} verified CPAs that fit your preferences."
-                              : "We found ${allCpas.length} verified CPAs that fit your preferences.",
-                          fontSize: 12,
+                        IconButton.filledTonal(
+                          icon: Badge(
+                            isLabelVisible: isAnyActiveFilter,
+                            child: const Icon(Icons.filter_list),
+                          ),
+                          onPressed: _showFilterDialog,
                         ),
                       ],
                     ),
-                    IconButton(
-                      icon: Badge(
-                        isLabelVisible: isAnyActiveFilter,
-                        child: Icon(Icons.filter_list),
-                      ),
-                      onPressed: _showFilterDialog,
+                    const SizedBox(height: 16),
+                    
+                    // Search bar with magnifying glass button
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: isDark ? scheme.surfaceContainerHigh : Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+                            ),
+                            child: TextField(
+                              controller: searchController,
+                              decoration: const InputDecoration(
+                                hintText: "Search CPAs by name, specialties, or states...",
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          height: 44,
+                          width: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade600,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.search, color: Colors.white),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 15),
-                child: AppTextField(
-                  hintText: "Search CPAs by name...",
-                  controller: searchController,
-                  onChanged: (val) {
-                    // Handled by listener but good to have explicit too if needed
-                    // listener calls setState already
-                  },
-                ),
-              ),
+
               _buildActiveFilters(),
+
               Expanded(
                 child: filteredCpas.isEmpty
                     ? const Center(
                         child: Text("No CPAs found matching your criteria."),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: filteredCpas.length,
                         itemBuilder: (context, index) {
-                          return CpaCard(cpa: filteredCpas[index]);
+                          // Make the first one TOP MATCH as in the mockup for visual balance
+                          return CpaCard(
+                            cpa: filteredCpas[index],
+                            isTopMatch: index == 0,
+                          );
                         },
                       ),
               ),

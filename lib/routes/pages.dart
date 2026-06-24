@@ -12,6 +12,7 @@ import 'package:booksmart/modules/cpa/ui/settings_screen.dart';
 import 'package:booksmart/modules/common/ui/authentication/login_screen.dart';
 import 'package:booksmart/modules/common/ui/authentication/signup_screen.dart';
 import 'package:booksmart/modules/user/ui/cpa/dashboard_screen.dart';
+import 'package:booksmart/modules/user/ui/cpa/order/orders_list_screen.dart';
 import 'package:booksmart/modules/user/ui/home/template/web_template.dart';
 import 'package:booksmart/modules/user/ui/bulk_review/bulk_review_screen.dart';
 import 'package:booksmart/modules/user/ui/tax_filling/tax_filling.dart';
@@ -126,6 +127,13 @@ class AppPages {
       name: Routes.cpaNetwork,
       page: () => getRequiredScreen(
         kIsWeb ? WebTemplate(child: CpaNetworkScreen()) : CpaNetworkScreen(),
+        UserRole.user,
+      ),
+    ),
+    GetPage(
+      name: Routes.userOrders,
+      page: () => getRequiredScreen(
+        kIsWeb ? WebTemplate(child: const UserOrdersScreen()) : const UserOrdersScreen(),
         UserRole.user,
       ),
     ),

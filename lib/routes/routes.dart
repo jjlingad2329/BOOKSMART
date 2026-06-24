@@ -10,6 +10,7 @@ abstract class Routes {
   // web-side-bar routes
   static const String tax = '/user/tax';
   static const String cpaNetwork = '/user/cpa-network';
+  static const String userOrders = '/user/orders';
   static const String tokens = '/user/token';
   static const String report = '/user/reports';
   static const String chat = '/user/chat';

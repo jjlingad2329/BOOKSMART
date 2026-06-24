@@ -141,6 +141,12 @@ class _HomeScreenState extends State<HomeScreen> {
                               },
                             ),
                             DrawerItemWidget(
+                              title: "Orders",
+                              onTap: () {
+                                Get.toNamed(Routes.userOrders);
+                              },
+                            ),
+                            DrawerItemWidget(
                               title: "AI Chat",
                               onTap: () {
                                 Get.toNamed(Routes.userAIchat);

@@ -89,6 +89,12 @@ class WebSideBar extends StatelessWidget {
                         routeName: Routes.cpaNetwork,
                         isShowName: isShowName,
                       ),
+                      SideBarIcon(
+                        icon: Icons.shopping_bag_outlined,
+                        infoMessage: 'Orders',
+                        routeName: Routes.userOrders,
+                        isShowName: isShowName,
+                      ),
 
                       SideBarIcon(
                         icon: Icons.token_outlined,
