@@ -1,6 +1,8 @@
 import 'package:booksmart/constant/exports.dart';
+import 'package:booksmart/modules/user/controllers/tax_document_controller.dart';
 import 'package:booksmart/modules/user/ui/home/template/web_template.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 
 import '../../../common/components/drawer_item_widget.dart';
@@ -58,6 +60,17 @@ class _HomeScreenState extends State<HomeScreen> {
   FinincialTabController finincialTabController = Get.put(
     FinincialTabController(),
   );
+
+  @override
+  void initState() {
+    super.initState();
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      final ctrl = Get.isRegistered<TaxDocumentController>()
+          ? Get.find<TaxDocumentController>()
+          : Get.put(TaxDocumentController());
+      ctrl.checkPendingStatementReview();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

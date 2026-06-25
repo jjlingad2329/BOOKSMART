@@ -29,6 +29,7 @@ abstract class Routes {
   static const String aiStrategy = '/user/ai-strategy';
   static const String userProfile = '/user/profile';
   static const String userAIchat = '/user/ai-chat';
+  static const String statementReview = '/user/statement-review';
 
   /// ====
   /// =====

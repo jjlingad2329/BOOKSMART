@@ -46,6 +46,7 @@ import '../modules/user/ui/settings/settings_screen.dart';
 import '../modules/user/ui/subscription_screen.dart';
 import '../modules/user/ui/token/earn_tokens_screen.dart';
 import '../modules/user/ui/token/token_purchase_screen.dart';
+import '../modules/user/ui/bank_statement/statement_review_screen.dart';
 
 class AppPages {
   static final routes = [
@@ -174,6 +175,16 @@ class AppPages {
         kIsWeb
             ? WebTemplate(child: AIGenericChatScreen())
             : AIGenericChatScreen(),
+        UserRole.user,
+      ),
+    ),
+
+    GetPage(
+      name: Routes.statementReview,
+      page: () => getRequiredScreen(
+        StatementReviewScreen(
+          importId: int.parse(Get.parameters['import_id'] ?? '0'),
+        ),
         UserRole.user,
       ),
     ),

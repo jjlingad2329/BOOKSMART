@@ -1,5 +1,6 @@
 import 'package:booksmart/constant/exports.dart';
 import 'package:booksmart/modules/user/controllers/tax_document_controller.dart';
+import 'package:booksmart/modules/user/ui/bank_statement/statement_review_screen.dart';
 import 'package:booksmart/widgets/snackbar.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/foundation.dart';
@@ -165,7 +166,7 @@ class _UploadTaxDocWidgetState extends State<UploadTaxDocWidget> {
   }
 
   Future<void> _save(BuildContext context) async {
-    final fileUrl = await _ctrl.uploadDocument(
+    final result = await _ctrl.uploadDocument(
       name: nameCtrl.text,
       taxYear: selectedYear,
       category: selectedCategory,
@@ -175,7 +176,10 @@ class _UploadTaxDocWidgetState extends State<UploadTaxDocWidget> {
       balanceSheetAsOf:
           _isBalanceSheetUpload ? balanceSheetAsOf : null,
     );
-    if (fileUrl != null) {
+    if (result is int) {
+      _popUploadDialog();
+      showStatementReviewDialog(importId: result);
+    } else if (result != null) {
       _popUploadDialog();
       if (!_ctrl.consumeSuppressUploadSuccessSnack()) {
         showSnackBar('Document Uploaded Successfully');

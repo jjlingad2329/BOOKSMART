@@ -1,8 +1,15 @@
 import 'dart:developer';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+import 'package:flutter/services.dart';
+import 'package:printing/printing.dart';
+import 'package:booksmart/services/ai_extraction_service.dart';
+import 'package:booksmart/modules/user/controllers/organization_controller.dart';
 import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
 
 import 'package:booksmart/models/financial_template_models.dart';
+import 'package:booksmart/modules/user/ui/bank_statement/statement_review_screen.dart';
 import 'package:booksmart/modules/user/ui/tax_filling/bs_reconciliation_dialog.dart';
 import 'package:booksmart/modules/user/ui/tax_filling/manual_pnl_review_helper.dart';
 import 'package:booksmart/modules/user/ui/tax_filling/pl_reconciliation_dialog.dart';
@@ -13,7 +20,6 @@ import 'package:booksmart/models/transaction_model.dart';
 import 'package:booksmart/models/user_document_model.dart';
 import 'package:booksmart/modules/common/controllers/auth_controller.dart';
 import 'package:booksmart/modules/user/controllers/financial_report_controller.dart';
-import 'package:booksmart/modules/user/controllers/organization_controller.dart';
 import 'package:booksmart/services/document_parser_service.dart';
 import 'package:booksmart/services/storage_service.dart';
 import 'package:booksmart/supabase/buckets.dart';
@@ -167,8 +173,9 @@ class TaxDocumentController extends GetxController {
     }
   }
 
-  /// Returns the `fileUrl` on success, `null` otherwise.
-  Future<String?> uploadDocument({
+  /// Returns importId (int) for PDF/image uploads so the caller can navigate
+  /// to the review screen. Returns fileUrl (String) for other file types.
+  Future<dynamic> uploadDocument({
     required String name,
     String? taxYear,
     String? category,
@@ -241,7 +248,7 @@ class TaxDocumentController extends GetxController {
         return null;
       }
 
-      // 2. Get file size
+      // 2. Get file size + test PDF text extraction
       int? fileSize;
       try {
         final bytes = await fileToUpload.readAsBytes();
@@ -283,10 +290,16 @@ class TaxDocumentController extends GetxController {
         if (periodMeta.isNotEmpty) 'parsed_data': periodMeta,
       };
 
-      await supabase.from(SupabaseTable.userDocuments).insert(payload);
+      final inserted = await supabase
+          .from(SupabaseTable.userDocuments)
+          .insert(payload)
+          .select()
+          .single();
+      final int documentId = inserted['id'];
 
-      final normalizedType =
-          _documentCategoryToParserType(category) ?? _normalizeType(type);
+      final normalizedType = (category != null && category.isNotEmpty)
+          ? _documentCategoryToParserType(category)
+          : _normalizeType(type);
       if (normalizedType != null) {
         final parsedData = await DocumentParserService.parseDocument(
           fileToUpload,
@@ -421,9 +434,22 @@ class TaxDocumentController extends GetxController {
             );
           }
         }
+      // 4. Trigger bank statement pipeline — only for user's own PDF/image uploads
+      } else if (manualFile == null &&
+          userId == null &&
+          (mimeType == 'application/pdf' || mimeType.startsWith('image/'))) {
+        final importId = await _triggerStatementImport(
+          documentId: documentId,
+          fileUrl: fileUrl,
+          mimeType: mimeType,
+          fileToUpload: fileToUpload,
+        );
+        if (manualFile == null) pickedFile = null;
+        await fetchDocuments();
+        if (importId != null) return importId;
       }
 
-      // 4. Reset picked file and refresh list
+      // 5. Reset picked file and refresh list (non-statement files)
       if (manualFile == null) {
         pickedFile = null;
       }
@@ -2665,6 +2691,178 @@ class TaxDocumentController extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  // ── Pending review recovery (called on app load / org switch) ───────────────
+
+  Future<void> checkPendingStatementReview() async {
+    try {
+      final userId = authUser?.id;
+      final orgId = getCurrentOrganization?.id;
+      if (userId == null || orgId == null) return;
+
+      final results = await supabase
+          .from(SupabaseTable.statementImports)
+          .select('id, status')
+          .eq('user_id', userId)
+          .eq('org_id', orgId)
+          .filter('status', 'in', '("processing","completed")')
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      final rows = results as List;
+      if (rows.isEmpty) return;
+
+      final importId = rows[0]['id'] as int;
+      final status = rows[0]['status'] as String;
+
+      if (status == 'completed') {
+        final pending = (await supabase
+            .from(SupabaseTable.pendingTransactions)
+            .select('id')
+            .eq('import_id', importId)
+            .limit(1)) as List;
+        if (pending.isEmpty) return;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 1200));
+      // ignore: use_build_context_synchronously
+      showStatementReviewDialog(importId: importId);
+    } catch (e) {
+      log('checkPendingStatementReview error: $e');
+    }
+  }
+
+  // ── Statement Import Pipeline ─────────────────────────────────────────────
+
+  Future<int?> _triggerStatementImport({
+    required int documentId,
+    required String fileUrl,
+    required String mimeType,
+    required XFile fileToUpload,
+  }) async {
+    final userId = authUser?.id;
+    final orgId = getCurrentOrganization?.id;
+    log('_triggerStatementImport: userId=$userId orgId=$orgId fileUrl=$fileUrl');
+    if (userId == null || orgId == null) {
+      log('_triggerStatementImport: aborting — userId or orgId is null');
+      return null;
+    }
+
+    // Pre-extract text from text-based PDFs (free, avoids OCR cost).
+    // For scanned PDFs, render pages to PNG and upload so GPT-4o Vision can read them.
+    String extractedText = '';
+    bool isScanned = false;
+    String effectiveFileUrl = fileUrl;
+    String effectiveMimeType = mimeType;
+
+    if (mimeType == 'application/pdf') {
+      final bytes = await fileToUpload.readAsBytes();
+      extractedText = AIExtractionService.extractPdfText(bytes.toList());
+      isScanned = extractedText.length < 50;
+
+      if (isScanned) {
+        final pngFile = await _rasterizePdfToXFile(bytes, fileToUpload.name);
+        if (pngFile != null) {
+          final pngUrl = await uploadFileToSupabaseStorage(
+            file: pngFile,
+            bucketName: SupabaseStorageBucket.documents,
+            contentType: 'image/png',
+          );
+          if (pngUrl != null && pngUrl.isNotEmpty) {
+            effectiveFileUrl = pngUrl;
+            effectiveMimeType = 'image/png';
+            log('_triggerStatementImport: scanned PDF converted to PNG');
+          }
+        }
+      }
+    } else {
+      isScanned = true;
+    }
+
+    // Extract storage path from effective URL
+    final storagePath = effectiveFileUrl.contains('/documents/')
+        ? effectiveFileUrl.split('/documents/').last
+        : '';
+    log('_triggerStatementImport: storagePath=$storagePath mime=$effectiveMimeType');
+    if (storagePath.isEmpty) {
+      log('_triggerStatementImport: aborting — could not extract storagePath from $effectiveFileUrl');
+      return null;
+    }
+
+    try {
+      final result = await supabase
+          .from(SupabaseTable.statementImports)
+          .insert({
+            'user_id': userId,
+            'org_id': orgId,
+            'document_id': documentId,
+            'document_path': storagePath,
+            'mime_type': effectiveMimeType,
+            'is_scanned': isScanned,
+            'extracted_text': isScanned ? null : extractedText,
+            'status': 'processing',
+          })
+          .select('id')
+          .single();
+      return result['id'] as int;
+    } catch (e, st) {
+      log('StatementImport trigger error: $e\n$st');
+      showSnackBar('Statement import failed: $e', isError: true);
+      return null;
+    }
+  }
+
+  /// Renders all pages of a scanned PDF to a single combined PNG image.
+  Future<XFile?> _rasterizePdfToXFile(List<int> pdfBytes, String originalName) async {
+    try {
+      final uint8Bytes = Uint8List.fromList(pdfBytes);
+      final pageImages = <Uint8List>[];
+
+      await for (final page in Printing.raster(uint8Bytes, dpi: 150)) {
+        pageImages.add(await page.toPng());
+      }
+
+      if (pageImages.isEmpty) return null;
+
+      final combined = pageImages.length == 1
+          ? pageImages[0]
+          : await _combinePngImages(pageImages);
+
+      final baseName = originalName.replaceAll(RegExp(r'\.pdf$', caseSensitive: false), '');
+      return XFile.fromData(combined, name: '${baseName}_scan.png', mimeType: 'image/png');
+    } catch (e) {
+      log('PDF rasterization error: $e');
+      return null;
+    }
+  }
+
+  /// Stacks multiple PNG images vertically into one PNG.
+  Future<Uint8List> _combinePngImages(List<Uint8List> pngImages) async {
+    final images = await Future.wait(
+      pngImages.map((bytes) async {
+        final codec = await ui.instantiateImageCodec(bytes);
+        final frame = await codec.getNextFrame();
+        return frame.image;
+      }),
+    );
+
+    final maxWidth = images.map((img) => img.width).reduce(math.max);
+    final totalHeight = images.fold<int>(0, (sum, img) => sum + img.height);
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    double offsetY = 0;
+    for (final image in images) {
+      canvas.drawImage(image, Offset(0, offsetY), Paint());
+      offsetY += image.height;
+    }
+
+    final picture = recorder.endRecording();
+    final combined = await picture.toImage(maxWidth, totalHeight);
+    final byteData = await combined.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

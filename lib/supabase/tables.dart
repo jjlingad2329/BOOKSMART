@@ -20,4 +20,6 @@ class SupabaseTable {
   static String aiTaxStrategies = 'ai_tax_strategies';
   static String aiChatMessages = 'ai_chat_messages';
   static String subscriptions = 'subscriptions';
+  static String statementImports = 'statement_imports';
+  static String pendingTransactions = 'pending_transactions';
 }

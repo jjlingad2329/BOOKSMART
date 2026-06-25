@@ -242,7 +242,7 @@ class OrderController extends GetxController {
 
         // Formal Upload with metadata
         if (metadata != null && clientUserId != null) {
-          finalUrl = await taxDocCtrl.uploadDocument(
+          finalUrl = (await taxDocCtrl.uploadDocument(
             name: metadata['name'] ?? file.name,
             taxYear: metadata['year']?.toString(),
             category: metadata['category'],
@@ -250,7 +250,7 @@ class OrderController extends GetxController {
             orderId: orderId,
             cpaId: cpaId,
             manualFile: file,
-          );
+          )) as String?;
         }
 
         // Fallback to storage directly

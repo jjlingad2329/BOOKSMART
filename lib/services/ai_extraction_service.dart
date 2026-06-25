@@ -45,7 +45,7 @@ Rules:
       // Step 1: Prepare content parts based on file type
       if (_isPdf(mimeType, file.name)) {
         dev.log('⏳ [AIExtractionService] Extracting PDF text...');
-        final text = _extractPdfText(bytes);
+        final text = extractPdfText(bytes);
         if (text.isEmpty) {
           dev.log('⚠️ [AIExtractionService] PDF extraction returned empty text');
           return null;
@@ -328,7 +328,7 @@ Rules:
     return data;
   }
 
-  static String _extractPdfText(List<int> bytes) {
+  static String extractPdfText(List<int> bytes) {
     try {
       final document = pdf_gen.PdfDocument(inputBytes: bytes);
       final text = pdf_gen.PdfTextExtractor(document).extractText();
