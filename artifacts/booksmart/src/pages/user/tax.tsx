@@ -294,8 +294,10 @@ function StatementReviewDialog({
   }, [open, importId]);
 
   function invalidateDashboard() {
-    qc.invalidateQueries({ queryKey: ["tx_month", numericUserId] });
-    qc.invalidateQueries({ queryKey: ["tx_recent", numericUserId] });
+    // Invalidate by prefix so it matches regardless of whether the key is
+    // keyed by numericUserId or orgId (dashboard uses orgId after the fix).
+    qc.invalidateQueries({ queryKey: ["tx_month"] });
+    qc.invalidateQueries({ queryKey: ["tx_recent"] });
   }
 
   async function approveRow(row: PendingTx) {

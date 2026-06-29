@@ -209,37 +209,55 @@ export default function UserDashboard() {
   const tokenBalance = profile?.token_balance ?? 0;
   const qc = useQueryClient();
 
-  // Real-time: invalidate transaction queries when n8n writes new transactions
+  // Fetch the user's organization (transactions are stored under org_id, matching Flutter)
+  const { data: orgData } = useQuery<{ id: number } | null>({
+    queryKey: ["user_org", numericId],
+    enabled: numericId !== null,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("owner_id", numericId!)
+        .limit(1)
+        .maybeSingle();
+      return (data as { id: number } | null) ?? null;
+    },
+  });
+  const orgId = orgData?.id ?? null;
+
+  // Real-time: invalidate transaction queries when n8n writes new transactions.
+  // Flutter filters by org_id, so we do the same.
   useEffect(() => {
-    if (!numericId) return;
+    if (!orgId) return;
     const channel = supabase
-      .channel(`transactions:user_${numericId}`)
+      .channel(`transactions:org_${orgId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "transactions",
-          filter: `user_id=eq.${numericId}`,
+          filter: `org_id=eq.${orgId}`,
         },
         () => {
-          qc.invalidateQueries({ queryKey: ["tx_month", numericId] });
-          qc.invalidateQueries({ queryKey: ["tx_recent", numericId] });
+          qc.invalidateQueries({ queryKey: ["tx_month", orgId] });
+          qc.invalidateQueries({ queryKey: ["tx_recent", orgId] });
         }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [numericId, qc]);
+  }, [orgId, qc]);
 
-  // Current-month transactions (for income / expense summary)
+  // Current-month transactions (for income / expense summary) — filter by org_id like Flutter
   const { data: monthTxs = [], isLoading: monthLoading } = useQuery<Transaction[]>({
-    queryKey: ["tx_month", numericId],
-    enabled: numericId !== null,
+    queryKey: ["tx_month", orgId],
+    enabled: orgId !== null,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
         .select("id, title, amount, type, date_time, description, deductible")
-        .eq("user_id", numericId!)
+        .eq("org_id", orgId!)
         .gte("date_time", startOfMonth())
         .order("date_time", { ascending: false });
       if (error) throw error;
@@ -247,15 +265,15 @@ export default function UserDashboard() {
     },
   });
 
-  // Recent 5 transactions (all time)
+  // Recent 5 transactions (all time) — filter by org_id like Flutter
   const { data: recentTxs = [], isLoading: recentLoading } = useQuery<Transaction[]>({
-    queryKey: ["tx_recent", numericId],
-    enabled: numericId !== null,
+    queryKey: ["tx_recent", orgId],
+    enabled: orgId !== null,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("transactions")
         .select("id, title, amount, type, date_time, description")
-        .eq("user_id", numericId!)
+        .eq("org_id", orgId!)
         .order("date_time", { ascending: false })
         .limit(5);
       if (error) throw error;
