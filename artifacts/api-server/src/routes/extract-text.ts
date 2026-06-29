@@ -42,10 +42,10 @@ router.post("/extract-text", requireAuth, async (req, res) => {
       text = "";
     }
 
-    const isScanned = text.length < 50;
+    const needsVision = text.length < 50;
 
     // ── Step 2: Gemini vision fallback for scanned PDFs ───────────────────────
-    if (isScanned) {
+    if (needsVision) {
       const apiKey = process.env.OPENROUTER_API_KEY;
       if (!apiKey) {
         console.warn("[extract-text] No OPENROUTER_API_KEY — cannot use vision fallback");
@@ -100,6 +100,13 @@ router.post("/extract-text", requireAuth, async (req, res) => {
         }
       }
     }
+
+    // is_scanned tells n8n whether to use the image path (file from storage)
+    // or the text path (extracted_text field). Since we always extract text
+    // ourselves (pdf-parse OR Gemini), always use the text path — even if the
+    // original PDF was a scanned image. Setting is_scanned=true when the file
+    // in storage is still a PDF causes n8n to fail with "unsupported image format".
+    const isScanned = false;
 
     res.json({ text, isScanned });
   } catch (err) {
