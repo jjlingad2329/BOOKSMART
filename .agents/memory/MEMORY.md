@@ -1,2 +1,1 @@
-- [DB schema & FK pattern](db-schema.md) — users.id is bigint PK; all FK columns (user_documents.user_id, transactions.user_id) use integer id NOT auth UUID
-- [AI extraction route](ai-extraction.md) — /api/extract-document uses gpt-4o vision; body limit 15MB; docType pnl/bs/cf; prompts mirror Flutter AIExtractionService
+- [Statement import upload flow](statement-import-flow.md) — Transactions (PDF/image only) → statement_imports → n8n; P&L/BS/CF → AI extract → save transactions directly

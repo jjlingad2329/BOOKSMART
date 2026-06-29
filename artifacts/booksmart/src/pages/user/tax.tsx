@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -198,17 +198,271 @@ function formatDate(iso: string) {
   });
 }
 
+// ── Statement Review Dialog ───────────────────────────────────────────────────
+
+type PendingTx = {
+  id: number;
+  import_id: number;
+  user_id: number;
+  org_id: number;
+  title: string;
+  amount: number;
+  date_time: string;
+  description: string;
+  transaction_type: "debit" | "credit";
+  running_balance: number | null;
+  is_duplicate: boolean;
+  status: string;
+};
+
+function StatementReviewDialog({
+  importId,
+  open,
+  onClose,
+  numericUserId,
+  onReviewComplete,
+}: {
+  importId: number;
+  open: boolean;
+  onClose: () => void;
+  numericUserId: number;
+  onReviewComplete: () => void;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [importStatus, setImportStatus] = useState<"processing" | "completed" | "failed">("processing");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [rows, setRows] = useState<PendingTx[]>([]);
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollCountRef = useRef(0);
+
+  const fetchRows = async () => {
+    setLoadingRows(true);
+    try {
+      const { data } = await supabase
+        .from("pending_transactions")
+        .select("*")
+        .eq("import_id", importId)
+        .eq("status", "pending")
+        .order("date_time", { ascending: true });
+      setRows((data as PendingTx[]) ?? []);
+    } finally {
+      setLoadingRows(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    pollCountRef.current = 0;
+    setImportStatus("processing");
+    setErrorMsg("");
+    setRows([]);
+
+    const poll = async () => {
+      pollCountRef.current += 1;
+      if (pollCountRef.current > 30) {
+        setImportStatus("failed");
+        setErrorMsg("Processing timed out. Please try again.");
+        return;
+      }
+      try {
+        const { data } = await supabase
+          .from("statement_imports")
+          .select("status, error_message")
+          .eq("id", importId)
+          .single();
+        const st = (data?.status ?? "processing") as typeof importStatus;
+        if (st === "completed") {
+          setImportStatus("completed");
+          await fetchRows();
+        } else if (st === "failed") {
+          setImportStatus("failed");
+          setErrorMsg(data?.error_message ?? "Import failed");
+        } else {
+          pollRef.current = setTimeout(poll, 3000);
+        }
+      } catch {
+        pollRef.current = setTimeout(poll, 3000);
+      }
+    };
+
+    pollRef.current = setTimeout(poll, 3000);
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+  }, [open, importId]);
+
+  function invalidateDashboard() {
+    qc.invalidateQueries({ queryKey: ["tx_month", numericUserId] });
+    qc.invalidateQueries({ queryKey: ["tx_recent", numericUserId] });
+  }
+
+  async function approveRow(row: PendingTx) {
+    setApprovingId(row.id);
+    try {
+      await supabase.from("transactions").insert({
+        user_id: row.user_id,
+        org_id: row.org_id,
+        title: row.title,
+        amount: row.transaction_type === "debit" ? -Math.abs(row.amount) : Math.abs(row.amount),
+        description: row.description,
+        type: "Business",
+        deductible: true,
+        date_time: row.date_time,
+        is_ai_verified: false,
+      });
+      await supabase.from("pending_transactions").delete().eq("id", row.id);
+      setRows((prev) => prev.filter((r) => r.id !== row.id));
+      invalidateDashboard();
+    } catch {
+      toast({ title: "Failed to approve transaction", variant: "destructive" });
+    } finally {
+      setApprovingId(null);
+    }
+  }
+
+  async function rejectRow(row: PendingTx) {
+    setRejectingId(row.id);
+    try {
+      await supabase.from("pending_transactions").delete().eq("id", row.id);
+      setRows((prev) => prev.filter((r) => r.id !== row.id));
+    } catch {
+      toast({ title: "Failed to reject transaction", variant: "destructive" });
+    } finally {
+      setRejectingId(null);
+    }
+  }
+
+  async function approveAll() {
+    for (const row of [...rows]) {
+      await approveRow(row);
+    }
+    toast({ title: "All transactions approved" });
+    onReviewComplete();
+    onClose();
+  }
+
+  async function rejectAll() {
+    try {
+      await supabase.from("pending_transactions").delete().eq("import_id", importId);
+      setRows([]);
+      toast({ title: "All transactions rejected" });
+    } catch {
+      toast({ title: "Failed to reject all", variant: "destructive" });
+    }
+    onReviewComplete();
+    onClose();
+  }
+
+  function fmtAmt(amount: number, type: string) {
+    const abs = Math.abs(amount);
+    const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(abs);
+    return type === "debit" ? `-${fmt}` : `+${fmt}`;
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {importStatus === "processing" && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+            {importStatus === "completed" && <CheckCircle2 className="h-5 w-5 text-emerald-400" />}
+            {importStatus === "processing" ? "Processing Statement…" : importStatus === "completed" ? `Review Transactions (${rows.length})` : "Import Failed"}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {importStatus === "processing" && (
+            <div className="flex flex-col items-center gap-4 py-16">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground text-center max-w-xs">
+                Your bank statement is being processed by AI. This usually takes 10–30 seconds.
+              </p>
+            </div>
+          )}
+
+          {importStatus === "failed" && (
+            <div className="flex flex-col items-center gap-4 py-12 text-destructive">
+              <X className="h-10 w-10" />
+              <p className="text-sm text-center">{errorMsg || "Import failed. Please try again."}</p>
+              <Button variant="outline" onClick={onClose}>Close</Button>
+            </div>
+          )}
+
+          {importStatus === "completed" && (
+            loadingRows ? (
+              <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+            ) : rows.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+                <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+                <p className="text-sm">No transactions found to review.</p>
+                <Button variant="outline" onClick={() => { onReviewComplete(); onClose(); }}>Done</Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {rows.map((row) => (
+                  <div key={row.id} className={`flex items-center gap-3 rounded-md border px-3 py-2 ${row.is_duplicate ? "border-amber-500/30 bg-amber-500/5" : "border-border/50"}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium truncate">{row.title}</span>
+                        {row.is_duplicate && <Badge variant="outline" className="text-xs text-amber-400 border-amber-600 flex-shrink-0">Duplicate</Badge>}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                        <span>{new Date(row.date_time).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                        {row.description && <span className="truncate max-w-[200px]">· {row.description}</span>}
+                      </div>
+                    </div>
+                    <span className={`text-sm font-semibold flex-shrink-0 ${row.transaction_type === "debit" ? "text-rose-400" : "text-emerald-400"}`}>
+                      {fmtAmt(row.amount, row.transaction_type)}
+                    </span>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-rose-400 border-rose-800 hover:bg-rose-950"
+                        disabled={rejectingId === row.id || approvingId === row.id}
+                        onClick={() => rejectRow(row)}>
+                        {rejectingId === row.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                      </Button>
+                      <Button size="sm" className="h-7 px-2 text-xs bg-emerald-700 hover:bg-emerald-600"
+                        disabled={approvingId === row.id || rejectingId === row.id}
+                        onClick={() => approveRow(row)}>
+                        {approvingId === row.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+
+        {importStatus === "completed" && rows.length > 0 && (
+          <DialogFooter className="gap-2 pt-3 border-t border-border/50">
+            <p className="text-xs text-muted-foreground flex-1">{rows.length} transaction{rows.length !== 1 ? "s" : ""} pending</p>
+            <Button variant="outline" size="sm" onClick={rejectAll} className="text-rose-400 border-rose-800 hover:bg-rose-950">
+              Reject All
+            </Button>
+            <Button size="sm" onClick={approveAll} className="bg-emerald-700 hover:bg-emerald-600">
+              Approve All
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Upload Dialog ─────────────────────────────────────────────────────────────
 
 type UploadDialogProps = {
   open: boolean;
   onClose: () => void;
   onUploaded: () => void;
+  onImportCreated: (importId: number) => void;
   numericUserId: number;
   authUuid: string; // used only for storage path namespacing
 };
 
-function UploadDialog({ open, onClose, onUploaded, numericUserId, authUuid }: UploadDialogProps) {
+function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserId, authUuid }: UploadDialogProps) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -323,25 +577,10 @@ function UploadDialog({ open, onClose, onUploaded, numericUserId, authUuid }: Up
       const docId = (inserted as { id: number }).id;
       setInsertedDocId(docId);
 
-      // Insert into statement_imports so the n8n webhook is triggered.
-      // Supabase database webhooks watch this table for INSERT events.
-      await supabase.from("statement_imports").insert({
-        user_id: numericUserId,
-        document_id: docId,
-        document_path: storagePath,
-        mime_type: mime,
-        status: "processing",
-        is_scanned: false,
-        extracted_text: "",
-        rows_approved: 0,
-        rows_rejected: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-
-      // Check if this category supports AI extraction
+      // Check if this category supports AI extraction (P&L / BS / CF)
       const docType = categoryToDocType(category);
       if (docType) {
+        // P&L / Balance Sheet / Cash Flow → AI extraction then review
         setStep("extracting");
         try {
           const result = await callExtractDocument(pickedFile, mime, docType);
@@ -352,7 +591,50 @@ function UploadDialog({ open, onClose, onUploaded, numericUserId, authUuid }: Up
           setExtractError(msg);
           setStep("review"); // show review step with error state
         }
+      } else if (
+        category === "Transactions" &&
+        (mime === "application/pdf" || mime.startsWith("image/"))
+      ) {
+        // Bank statement / Transactions → insert into statement_imports to
+        // trigger the n8n webhook; navigate to the Statement Review screen.
+        const { data: orgData } = await supabase
+          .from("organizations")
+          .select("id")
+          .eq("owner_id", numericUserId)
+          .limit(1)
+          .maybeSingle();
+        const orgId = (orgData as { id: number } | null)?.id ?? null;
+
+        const isScanned = mime.startsWith("image/");
+        const { data: importData, error: importError } = await supabase
+          .from("statement_imports")
+          .insert({
+            user_id: numericUserId,
+            ...(orgId !== null ? { org_id: orgId } : {}),
+            document_id: docId,
+            document_path: storagePath,
+            mime_type: mime,
+            is_scanned: isScanned,
+            extracted_text: isScanned ? null : "",
+            status: "processing",
+          })
+          .select("id")
+          .single();
+
+        if (!importError && importData) {
+          onUploaded();
+          reset();
+          onClose();
+          onImportCreated((importData as { id: number }).id);
+          return;
+        }
+        // Fallback if insert failed — just close
+        toast({ title: "Document uploaded. Statement import pending." });
+        onUploaded();
+        reset();
+        onClose();
       } else {
+        // Any other category — just store the document
         toast({ title: "Document uploaded successfully" });
         onUploaded();
         reset();
@@ -671,6 +953,7 @@ export default function Tax() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [reviewImportId, setReviewImportId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [filterYear, setFilterYear] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
@@ -952,8 +1235,21 @@ export default function Tax() {
           onUploaded={() =>
             qc.invalidateQueries({ queryKey: ["user_documents", numericId] })
           }
+          onImportCreated={(importId) => setReviewImportId(importId)}
           numericUserId={numericId}
           authUuid={user.id}
+        />
+      )}
+
+      {user && numericId !== null && reviewImportId !== null && (
+        <StatementReviewDialog
+          importId={reviewImportId}
+          open={reviewImportId !== null}
+          onClose={() => setReviewImportId(null)}
+          numericUserId={numericId}
+          onReviewComplete={() =>
+            qc.invalidateQueries({ queryKey: ["user_documents", numericId] })
+          }
         />
       )}
     </div>
