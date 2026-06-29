@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,8 @@ import {
   TrendingUp,
   ShieldCheck,
   Loader2,
-  Trash2,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -40,6 +42,13 @@ type Transaction = {
   date_time: string;
   description: string;
   deductible?: boolean;
+};
+
+type AiStrategy = {
+  title: string;
+  savings: number;
+  description: string;
+  difficulty: "Easy" | "Medium" | "Hard";
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -62,6 +71,50 @@ function formatDate(iso: string) {
 function startOfMonth() {
   const d = new Date();
   return new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+}
+
+function startOfLastMonth() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString();
+}
+
+// Business Power Score calculation from real data
+function calcBPS({
+  txCount,
+  docCount,
+  hasOrg,
+  profileComplete,
+  netPositive,
+  hasPendingReview,
+}: {
+  txCount: number;
+  docCount: number;
+  hasOrg: boolean;
+  profileComplete: boolean;
+  netPositive: boolean;
+  hasPendingReview: boolean;
+}) {
+  let score = 15;
+  score += Math.min(30, txCount * 3);   // up to 30 pts for transactions
+  score += Math.min(20, docCount * 5);  // up to 20 pts for documents
+  if (hasOrg) score += 10;
+  if (profileComplete) score += 10;
+  if (netPositive) score += 10;
+  if (!hasPendingReview && txCount > 0) score += 5;
+  return Math.min(100, Math.round(score));
+}
+
+function bpsLevel(score: number) {
+  if (score >= 95) return { level: 10, title: "Profit Machine", next: null, xpLabel: "MAX" };
+  if (score >= 85) return { level: 9, title: "Cashflow Builder", next: "Profit Machine", xpLabel: "9,000" };
+  if (score >= 75) return { level: 8, title: "Entrepreneur", next: "Cashflow Builder", xpLabel: "7,500" };
+  if (score >= 65) return { level: 7, title: "Achiever", next: "Entrepreneur", xpLabel: "6,000" };
+  if (score >= 55) return { level: 6, title: "Builder+", next: "Achiever", xpLabel: "5,000" };
+  if (score >= 45) return { level: 5, title: "Builder", next: "Builder+", xpLabel: "4,000" };
+  if (score >= 35) return { level: 4, title: "Explorer+", next: "Builder", xpLabel: "3,000" };
+  if (score >= 25) return { level: 3, title: "Explorer", next: "Explorer+", xpLabel: "2,000" };
+  if (score >= 15) return { level: 2, title: "Beginner", next: "Explorer", xpLabel: "1,000" };
+  return { level: 1, title: "Starter", next: "Beginner", xpLabel: "500" };
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -131,7 +184,6 @@ function BPSGauge({ score }: { score: number }) {
             <stop offset="100%" stopColor="#22c55e" />
           </linearGradient>
         </defs>
-        {/* track */}
         <path
           d={arcPath(-120, 120)}
           fill="none"
@@ -140,7 +192,6 @@ function BPSGauge({ score }: { score: number }) {
           strokeWidth="12"
           strokeLinecap="round"
         />
-        {/* filled arc */}
         <path
           d={arcPath(-120, -120 + (score / 100) * 240)}
           fill="none"
@@ -148,12 +199,10 @@ function BPSGauge({ score }: { score: number }) {
           strokeWidth="12"
           strokeLinecap="round"
         />
-        {/* needle dot */}
         {(() => {
           const p = polarToXY(angle);
           return <circle cx={p.x} cy={p.y} r="5" fill="white" />;
         })()}
-        {/* centre text */}
         <text
           x={cx}
           y={cy - 4}
@@ -195,8 +244,8 @@ function MissionItem({
       <span className={`text-sm flex-1 ${done ? "line-through text-muted-foreground" : ""}`}>
         {title}
       </span>
-      <Badge variant="outline" className="text-xs text-emerald-400 border-emerald-800">
-        {xp}
+      <Badge variant="outline" className={`text-xs border-emerald-800 ${done ? "text-muted-foreground line-through" : "text-emerald-400"}`}>
+        {done ? "Done" : xp}
       </Badge>
     </div>
   );
@@ -206,11 +255,16 @@ function MissionItem({
 
 export default function UserDashboard() {
   const { user, profile } = useAuth();
+  const { toast } = useToast();
   const numericId = profile?.numericId ?? null;
   const tokenBalance = profile?.token_balance ?? 0;
   const qc = useQueryClient();
 
-  // Fetch the user's organization (transactions are stored under org_id, matching Flutter)
+  const [insightData, setInsightData] = useState<{ strategies: AiStrategy[]; totalSavings: number } | null>(null);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [insightUnlocked, setInsightUnlocked] = useState(false);
+
+  // ── Org lookup ──────────────────────────────────────────────────────────────
   const { data: orgData } = useQuery<{ id: number } | null>({
     queryKey: ["user_org", numericId],
     enabled: numericId !== null,
@@ -232,35 +286,26 @@ export default function UserDashboard() {
   });
   const orgId = orgData?.id ?? null;
 
-  // Log null chain so we can diagnose empty dashboard in the browser console
   useEffect(() => {
     console.log("[dashboard] numericId:", numericId, "orgId:", orgId);
   }, [numericId, orgId]);
 
-  // Real-time: invalidate transaction queries when n8n writes new transactions.
-  // Flutter filters by org_id, so we do the same.
+  // ── Real-time transaction updates ──────────────────────────────────────────
   useEffect(() => {
     if (!orgId) return;
     const channel = supabase
       .channel(`transactions:org_${orgId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "transactions",
-          filter: `org_id=eq.${orgId}`,
-        },
-        () => {
-          qc.invalidateQueries({ queryKey: ["tx_month", orgId] });
-          qc.invalidateQueries({ queryKey: ["tx_recent", orgId] });
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions", filter: `org_id=eq.${orgId}` }, () => {
+        qc.invalidateQueries({ queryKey: ["tx_month", orgId] });
+        qc.invalidateQueries({ queryKey: ["tx_recent", orgId] });
+        qc.invalidateQueries({ queryKey: ["tx_count", orgId] });
+        qc.invalidateQueries({ queryKey: ["tx_last_month", orgId] });
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [orgId, qc]);
 
-  // Current-month transactions (for income / expense summary) — filter by org_id like Flutter
+  // ── This month's transactions ───────────────────────────────────────────────
   const { data: monthTxs = [], isLoading: monthLoading } = useQuery<Transaction[]>({
     queryKey: ["tx_month", orgId],
     enabled: orgId !== null,
@@ -271,16 +316,13 @@ export default function UserDashboard() {
         .eq("org_id", orgId!)
         .gte("date_time", startOfMonth())
         .order("date_time", { ascending: false });
-      if (error) {
-        console.error("[dashboard] tx_month query failed:", error.message, error.code);
-        throw error;
-      }
+      if (error) { console.error("[dashboard] tx_month failed:", error.message); throw error; }
       console.log("[dashboard] tx_month rows:", data?.length ?? 0);
       return data ?? [];
     },
   });
 
-  // Recent 5 transactions (all time) — filter by org_id like Flutter
+  // ── Recent 5 transactions (all time) ───────────────────────────────────────
   const { data: recentTxs = [], isLoading: recentLoading } = useQuery<Transaction[]>({
     queryKey: ["tx_recent", orgId],
     enabled: orgId !== null,
@@ -291,23 +333,247 @@ export default function UserDashboard() {
         .eq("org_id", orgId!)
         .order("date_time", { ascending: false })
         .limit(5);
-      if (error) {
-        console.error("[dashboard] tx_recent query failed:", error.message, error.code);
-        throw error;
-      }
+      if (error) { console.error("[dashboard] tx_recent failed:", error.message); throw error; }
       console.log("[dashboard] tx_recent rows:", data?.length ?? 0);
       return data ?? [];
     },
   });
 
+  // ── All-time transaction count ─────────────────────────────────────────────
+  const { data: allTxCount = 0 } = useQuery<number>({
+    queryKey: ["tx_count", orgId],
+    enabled: orgId !== null,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", orgId!);
+      return count ?? 0;
+    },
+  });
+
+  // ── Last month's income (for Revenue Growth) ───────────────────────────────
+  const { data: lastMonthTxs = [] } = useQuery<{ amount: number }[]>({
+    queryKey: ["tx_last_month", orgId],
+    enabled: orgId !== null,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("transactions")
+        .select("amount")
+        .eq("org_id", orgId!)
+        .gte("date_time", startOfLastMonth())
+        .lt("date_time", startOfMonth());
+      return data ?? [];
+    },
+  });
+
+  // ── Document count ─────────────────────────────────────────────────────────
+  const { data: docCount = 0 } = useQuery<number>({
+    queryKey: ["doc_count", numericId],
+    enabled: numericId !== null,
+    staleTime: 2 * 60 * 1000,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("user_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", numericId!);
+      return count ?? 0;
+    },
+  });
+
+  // ── Pending transactions count ─────────────────────────────────────────────
+  const { data: pendingCount = 0 } = useQuery<number>({
+    queryKey: ["pending_count", numericId],
+    enabled: numericId !== null,
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("pending_transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", numericId!);
+      return count ?? 0;
+    },
+  });
+
+  // ── Live token balance ─────────────────────────────────────────────────────
+  const { data: liveTokens = tokenBalance } = useQuery<number>({
+    queryKey: ["token_balance", numericId],
+    enabled: numericId !== null,
+    initialData: tokenBalance,
+    staleTime: 30 * 1000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("users")
+        .select("token_balance")
+        .eq("id", numericId!)
+        .single();
+      return (data as { token_balance: number } | null)?.token_balance ?? 0;
+    },
+  });
+
+  // ── Derived metrics ────────────────────────────────────────────────────────
   const income = monthTxs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const expenses = Math.abs(
-    monthTxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0)
-  );
+  const expenses = Math.abs(monthTxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0));
   const netProfit = income - expenses;
+
+  const lastMonthIncome = lastMonthTxs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const lastMonthExpenses = Math.abs(lastMonthTxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0));
+
+  const profileComplete = !!(profile?.full_name && profile.phone);
+  const netPositive = netProfit > 0;
+
+  const bpsScore = calcBPS({
+    txCount: allTxCount,
+    docCount,
+    hasOrg: orgId !== null,
+    profileComplete,
+    netPositive,
+    hasPendingReview: pendingCount > 0,
+  });
+  const bpsInfo = bpsLevel(bpsScore);
+
+  // XP = transactions * 50 + documents * 100
+  const xpTotal = allTxCount * 50 + docCount * 100;
+  // Streak = distinct days with transactions in last 7 days (approx from recentTxs)
+  const recentDays = new Set(recentTxs.map((t) => t.date_time.split("T")[0])).size;
+  const streakDays = Math.min(7, recentDays);
+
+  // Business Challenges
+  const revGrowthPct =
+    lastMonthIncome === 0
+      ? income > 0 ? 100 : 0
+      : Math.min(100, Math.round((income / lastMonthIncome) * 100));
+
+  const taxReadinessPct = Math.min(100, Math.round((docCount / 4) * 100)); // 4 docs = full readiness
+
+  const cashFlowPct =
+    income + expenses === 0
+      ? 0
+      : Math.min(100, Math.round((income / (income + expenses)) * 100));
+
+  // Achievements
+  const achievements = [
+    { icon: <Trophy className="h-5 w-5 text-amber-400" />, label: "First Upload", done: docCount > 0 },
+    { icon: <CheckCircle2 className="h-5 w-5 text-emerald-400" />, label: "5-Day Streak", done: streakDays >= 5 },
+    { icon: <TrendingUp className="h-5 w-5 text-blue-400" />, label: "Profit+", done: netPositive && allTxCount > 0 },
+    { icon: <ShieldCheck className="h-5 w-5 text-purple-400" />, label: "Tax Ready", done: docCount >= 4 },
+    { icon: <MessageSquare className="h-5 w-5 text-sky-400" />, label: "AI Chat", done: false },
+    { icon: <BarChart2 className="h-5 w-5 text-orange-400" />, label: "Reporting", done: false },
+  ];
+
+  // Missions
+  const missions = [
+    {
+      icon: <Upload className="h-4 w-4 text-blue-500" />,
+      title: "Upload a bank statement",
+      xp: "+200 XP",
+      done: docCount > 0,
+    },
+    {
+      icon: <Folder className="h-4 w-4 text-emerald-500" />,
+      title: "Approve your AI-scanned transactions",
+      xp: "+300 XP",
+      done: pendingCount === 0 && allTxCount > 0,
+    },
+    {
+      icon: <FileText className="h-4 w-4 text-purple-500" />,
+      title: "Upload tax documents (P&L, Balance Sheet)",
+      xp: "+400 XP",
+      done: docCount >= 2,
+    },
+    {
+      icon: <Lightbulb className="h-4 w-4 text-amber-500" />,
+      title: "Unlock AI tax strategies",
+      xp: "+500 XP",
+      done: insightUnlocked,
+    },
+  ];
 
   const firstName = profile?.full_name?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "there";
 
+  // ── AI Insight unlock ──────────────────────────────────────────────────────
+  async function unlockAiInsight() {
+    if (liveTokens < 150) {
+      toast({
+        title: "Insufficient tokens",
+        description: "You need at least 150 tokens to unlock AI Insights.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setInsightLoading(true);
+    try {
+      const txLines = [...monthTxs]
+        .slice(0, 30)
+        .map((t) => `${t.date_time.split("T")[0]}: ${t.title} ${t.amount >= 0 ? "+" : ""}$${Math.abs(t.amount).toFixed(2)}`)
+        .join("\n");
+
+      const prompt = `You are a US tax strategist for freelancers and small businesses. Analyze these recent transactions and financial summary:
+
+${txLines || "(No transactions this month yet)"}
+
+Monthly income: $${income.toFixed(2)}
+Monthly expenses: $${expenses.toFixed(2)}
+Net profit: $${netProfit.toFixed(2)}
+Total documents uploaded: ${docCount}
+
+Generate 3-5 specific, actionable US tax-saving strategies. Respond ONLY with valid JSON in this exact format:
+{
+  "strategies": [
+    { "title": "Strategy Name", "savings": 1500, "description": "Clear actionable step.", "difficulty": "Easy" },
+    { "title": "Strategy Name", "savings": 2000, "description": "Clear actionable step.", "difficulty": "Medium" }
+  ]
+}
+
+difficulty must be exactly "Easy", "Medium", or "Hard". savings is a number (USD).`;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const res = await fetch("/api/openai-chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-4o-mini",
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+
+      if (!res.ok) throw new Error(`AI call failed: ${res.status}`);
+      const aiData = await res.json() as { choices?: { message?: { content?: string } }[] };
+      const content = aiData.choices?.[0]?.message?.content ?? "";
+
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("Could not parse AI response");
+
+      const parsed = JSON.parse(jsonMatch[0]) as { strategies: AiStrategy[] };
+      const strategies = parsed.strategies ?? [];
+      const totalSavings = strategies.reduce((s, st) => s + (st.savings ?? 0), 0);
+
+      setInsightData({ strategies, totalSavings });
+      setInsightUnlocked(true);
+
+      // Deduct 150 tokens
+      await supabase
+        .from("users")
+        .update({ token_balance: Math.max(0, liveTokens - 150) })
+        .eq("id", numericId!);
+      qc.invalidateQueries({ queryKey: ["token_balance", numericId] });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast({ title: "Failed to generate insights", description: msg, variant: "destructive" });
+    } finally {
+      setInsightLoading(false);
+    }
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -316,15 +582,14 @@ export default function UserDashboard() {
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">Welcome back, {firstName}!</p>
         </div>
-        {/* Streak / XP strip */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5 text-sm font-semibold">
             <Flame className="h-5 w-5 text-orange-500" />
-            <span>Streak: 4 days</span>
+            <span>Streak: {streakDays} day{streakDays !== 1 ? "s" : ""}</span>
           </div>
           <div className="flex items-center gap-1.5 text-sm font-semibold">
             <Star className="h-5 w-5 text-emerald-500" />
-            <span>340 XP</span>
+            <span>{xpTotal.toLocaleString()} XP</span>
           </div>
         </div>
       </div>
@@ -354,7 +619,7 @@ export default function UserDashboard() {
         />
         <StatCard
           title="Token Balance"
-          value={`${tokenBalance.toLocaleString()} BS`}
+          value={`${liveTokens.toLocaleString()} BS`}
           sub="BookSmart tokens"
           icon={<Wallet className="h-4 w-4 text-yellow-500" />}
           loading={!profile}
@@ -374,29 +639,29 @@ export default function UserDashboard() {
             <CardContent>
               <div className="flex flex-col sm:flex-row items-start gap-6">
                 <div className="flex-shrink-0">
-                  <BPSGauge score={80} />
+                  <BPSGauge score={bpsScore} />
                 </div>
                 <div className="flex-1 space-y-3 pt-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold">Level 8</span>
-                    <span className="text-sm text-muted-foreground">Entrepreneur</span>
+                    <span className="text-sm font-bold">Level {bpsInfo.level}</span>
+                    <span className="text-sm text-muted-foreground">{bpsInfo.title}</span>
                     <Star className="h-4 w-4 text-amber-400 ml-1" />
                   </div>
-                  <Progress value={75} className="h-1.5" />
+                  <Progress value={(bpsScore % 10) * 10} className="h-1.5" />
 
                   <div className="pt-1">
-                    <p className="text-lg font-bold">Cashflow Builder</p>
-                    <Progress value={60} className="h-1.5 mt-1.5 [&>*]:bg-amber-400" />
+                    <p className="text-lg font-bold">{bpsInfo.title}</p>
+                    <Progress value={bpsScore} className="h-1.5 mt-1.5 [&>*]:bg-amber-400" />
                     <div className="flex justify-between mt-1.5 text-xs text-muted-foreground">
-                      <span>Next rank: Profit Machine</span>
-                      <span>Streak: 3,500</span>
+                      <span>{bpsInfo.next ? `Next rank: ${bpsInfo.next}` : "Maximum rank reached!"}</span>
+                      <span>XP: {xpTotal.toLocaleString()}</span>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-end">
                     <div className="rounded-full border border-border/50 bg-secondary/30 px-4 py-1.5 flex items-center gap-2 text-sm">
                       <span className="text-muted-foreground">Today's XP Potential:</span>
-                      <span className="font-bold text-emerald-400">+340 XP</span>
+                      <span className="font-bold text-emerald-400">+{Math.max(0, (4 - missions.filter(m => m.done).length) * 100)} XP</span>
                     </div>
                   </div>
                 </div>
@@ -409,54 +674,92 @@ export default function UserDashboard() {
             {/* Today's Missions */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-bold">Today's Missions</CardTitle>
+                <CardTitle className="text-sm font-bold">
+                  Today's Missions
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {missions.filter((m) => m.done).length}/{missions.length} complete
+                  </span>
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <MissionItem
-                  icon={<Folder className="h-4 w-4 text-emerald-500" />}
-                  title="Categorize 5 uncategorized transactions"
-                  xp="+550 XP"
-                />
-                <MissionItem
-                  icon={<Flame className="h-4 w-4 text-orange-500" />}
-                  title="Pay down credit card balance"
-                  xp="+120 XP"
-                />
-                <MissionItem
-                  icon={<Upload className="h-4 w-4 text-blue-500" />}
-                  title="Upload receipts for deductions"
-                  xp="+75 XP"
-                />
-                <MissionItem
-                  icon={<FileText className="h-4 w-4 text-purple-500" />}
-                  title="Review tax strategy suggestion"
-                  xp="+90 XP"
-                  done
-                />
+                {missions.map((m) => (
+                  <MissionItem key={m.title} icon={m.icon} title={m.title} xp={m.xp} done={m.done} />
+                ))}
               </CardContent>
             </Card>
 
-            {/* AI Insight teaser */}
+            {/* AI Insight */}
             <Card className="bg-gradient-to-br from-[#0a1628] to-[#0d2044] border-primary/20">
-              <CardContent className="pt-5 flex flex-col items-center text-center gap-2">
-                <p className="text-base font-bold text-white">AI Insight</p>
-                <p className="text-xs text-white/60">Maximize Your Business Savings Potential!</p>
-                <p className="text-4xl font-bold text-emerald-400 mt-1">$6,470</p>
-                <p className="text-sm text-white/80">across 5 strategic insights</p>
-                <p className="text-xs text-white/50 mt-1 max-w-[180px]">
-                  Unlock to view strategies on how to save your business up to $6,470
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-3 border-white/20 text-white hover:bg-white/10 gap-2"
-                >
-                  <Lock className="h-3.5 w-3.5" />
-                  Unlock &amp; View
-                  <span className="text-cyan-400 font-bold">150 Tokens</span>
-                  <Coins className="h-3.5 w-3.5 text-amber-400" />
-                </Button>
-              </CardContent>
+              {!insightUnlocked ? (
+                <CardContent className="pt-5 flex flex-col items-center text-center gap-2">
+                  <p className="text-base font-bold text-white flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-primary" /> AI Insight
+                  </p>
+                  <p className="text-xs text-white/60">Maximize Your Business Savings Potential!</p>
+                  {insightLoading ? (
+                    <div className="flex flex-col items-center gap-2 mt-3">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <p className="text-xs text-white/60">Analyzing your finances…</p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-4xl font-bold text-emerald-400 mt-1">
+                        {income > 0 ? formatMoney(income * 0.15) : "$—"}
+                      </p>
+                      <p className="text-sm text-white/80">estimated savings potential</p>
+                      <p className="text-xs text-white/50 mt-1 max-w-[180px]">
+                        Unlock AI-powered strategies tailored to your transactions
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3 border-white/20 text-white hover:bg-white/10 gap-2"
+                        onClick={unlockAiInsight}
+                        disabled={liveTokens < 150 || insightLoading}
+                      >
+                        <Lock className="h-3.5 w-3.5" />
+                        Unlock &amp; View
+                        <span className="text-cyan-400 font-bold">150 Tokens</span>
+                        <Coins className="h-3.5 w-3.5 text-amber-400" />
+                      </Button>
+                      {liveTokens < 150 && (
+                        <p className="text-[11px] text-rose-400 mt-1">
+                          Need {150 - liveTokens} more tokens
+                        </p>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              ) : insightData ? (
+                <CardContent className="pt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-bold text-white flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-primary" /> AI Insights
+                    </p>
+                    <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-800 text-xs">
+                      {insightData.strategies.length} strategies
+                    </Badge>
+                  </div>
+                  <p className="text-2xl font-bold text-emerald-400">{formatMoney(insightData.totalSavings)}</p>
+                  <p className="text-xs text-white/60">total savings potential identified</p>
+                  <div className="space-y-2 mt-1">
+                    {insightData.strategies.slice(0, 3).map((s, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-white/80 truncate flex-1">{s.title}</span>
+                        <span className="text-xs font-semibold text-emerald-400 flex-shrink-0">{formatMoney(s.savings)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full mt-2 border-white/20 text-white hover:bg-white/10 gap-2 text-xs"
+                    onClick={() => window.location.href = "/ai-strategy"}
+                  >
+                    View Full Strategies <ArrowRight className="h-3 w-3" />
+                  </Button>
+                </CardContent>
+              ) : null}
             </Card>
           </div>
 
@@ -465,18 +768,16 @@ export default function UserDashboard() {
             {/* Achievements */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-bold">Achievements</CardTitle>
+                <CardTitle className="text-sm font-bold">
+                  Achievements
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {achievements.filter((a) => a.done).length}/{achievements.length}
+                  </span>
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { icon: <Trophy className="h-5 w-5 text-amber-400" />, label: "First Upload", done: true },
-                    { icon: <CheckCircle2 className="h-5 w-5 text-emerald-400" />, label: "5-Day Streak", done: true },
-                    { icon: <TrendingUp className="h-5 w-5 text-blue-400" />, label: "Profit+", done: false },
-                    { icon: <ShieldCheck className="h-5 w-5 text-purple-400" />, label: "Tax Ready", done: false },
-                    { icon: <MessageSquare className="h-5 w-5 text-sky-400" />, label: "AI Chat", done: true },
-                    { icon: <BarChart2 className="h-5 w-5 text-orange-400" />, label: "Reporting", done: false },
-                  ].map((a) => (
+                  {achievements.map((a) => (
                     <div
                       key={a.label}
                       className={`flex flex-col items-center gap-1 rounded-lg p-2 ${
@@ -485,6 +786,7 @@ export default function UserDashboard() {
                     >
                       {a.icon}
                       <span className="text-[10px] text-center leading-tight">{a.label}</span>
+                      {a.done && <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />}
                     </div>
                   ))}
                 </div>
@@ -498,9 +800,28 @@ export default function UserDashboard() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {[
-                  { label: "Revenue Growth", pct: 68, color: "bg-emerald-500" },
-                  { label: "Tax Readiness", pct: 45, color: "bg-amber-500" },
-                  { label: "Cash Flow Score", pct: 72, color: "bg-blue-500" },
+                  {
+                    label: "Revenue Growth",
+                    pct: revGrowthPct,
+                    color: "bg-emerald-500",
+                    sub: lastMonthIncome > 0
+                      ? `vs ${formatMoney(lastMonthIncome)} last month`
+                      : income > 0 ? "First month data" : "No income yet",
+                  },
+                  {
+                    label: "Tax Readiness",
+                    pct: taxReadinessPct,
+                    color: "bg-amber-500",
+                    sub: `${docCount}/4 documents uploaded`,
+                  },
+                  {
+                    label: "Cash Flow Score",
+                    pct: cashFlowPct,
+                    color: "bg-blue-500",
+                    sub: income + expenses > 0
+                      ? `${formatMoney(income)} in / ${formatMoney(expenses)} out`
+                      : "Upload statements to score",
+                  },
                 ].map((c) => (
                   <div key={c.label} className="space-y-1">
                     <div className="flex justify-between text-xs">
@@ -509,10 +830,11 @@ export default function UserDashboard() {
                     </div>
                     <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${c.color} rounded-full`}
+                        className={`h-full ${c.color} rounded-full transition-all duration-700`}
                         style={{ width: `${c.pct}%` }}
                       />
                     </div>
+                    <p className="text-[10px] text-muted-foreground">{c.sub}</p>
                   </div>
                 ))}
               </CardContent>
@@ -534,9 +856,14 @@ export default function UserDashboard() {
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : recentTxs.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-6 text-center">
-                  No transactions yet.
-                </p>
+                <div className="text-center py-6 space-y-2">
+                  <p className="text-sm text-muted-foreground">No transactions yet.</p>
+                  {pendingCount > 0 && (
+                    <p className="text-xs text-amber-400">
+                      {pendingCount} pending — approve them in Transactions
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-3">
                   {recentTxs.map((tx) => (
@@ -573,50 +900,45 @@ export default function UserDashboard() {
             </CardContent>
           </Card>
 
-          {/* Dun & Bradstreet */}
+          {/* Dun & Bradstreet — requires external integration */}
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-bold">Dun &amp; Bradstreet</CardTitle>
-                <span className="text-xs text-muted-foreground">Verified Business</span>
+                <Badge variant="outline" className="text-[10px] text-muted-foreground">Not connected</Badge>
               </div>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-4">
-                {/* mini circular gauge */}
-                <div className="relative flex-shrink-0 w-16 h-16">
+                <div className="relative flex-shrink-0 w-16 h-16 opacity-40">
                   <svg viewBox="0 0 64 64" className="w-full h-full -rotate-90">
                     <circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" strokeOpacity="0.1" strokeWidth="8" />
                     <circle
                       cx="32" cy="32" r="26" fill="none"
-                      stroke="url(#dbGrad)" strokeWidth="8"
-                      strokeDasharray={`${(78 / 100) * 163} 163`}
+                      stroke="currentColor" strokeWidth="8"
+                      strokeDasharray="50 163"
                       strokeLinecap="round"
                     />
-                    <defs>
-                      <linearGradient id="dbGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#ef4444" />
-                        <stop offset="100%" stopColor="#22c55e" />
-                      </linearGradient>
-                    </defs>
                   </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-lg font-bold">78</span>
+                  <span className="absolute inset-0 flex items-center justify-center text-lg font-bold">—</span>
                 </div>
-                <div>
-                  <p className="text-xl font-bold">Good</p>
-                  <p className="text-xs text-muted-foreground">Business age: 4 Years</p>
-                  <p className="text-xs text-muted-foreground">Threshold: 60</p>
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground">Connect your D&B account to track your PAYDEX score and business credit health.</p>
                 </div>
-                <ShieldCheck className="h-7 w-7 text-amber-400/70 ml-auto flex-shrink-0" />
               </div>
-              <div className="mt-3 h-1.5 rounded-full bg-gradient-to-r from-emerald-400 to-orange-400" />
+              <Button size="sm" variant="outline" className="w-full mt-3 text-xs" disabled>
+                Connect D&B Account
+              </Button>
             </CardContent>
           </Card>
 
           {/* Funding */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-bold">Funding</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-bold">Funding Readiness</CardTitle>
+                <Badge variant="outline" className="text-[10px] text-muted-foreground">Estimated</Badge>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-3">
@@ -624,10 +946,13 @@ export default function UserDashboard() {
                   <Wallet className="h-5 w-5 text-emerald-500" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-bold">Loan Ready</p>
+                  <p className="text-sm font-bold">
+                    {bpsScore >= 70 ? "Loan Ready" : bpsScore >= 45 ? "Getting There" : "Build Credit First"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Based on your BPS of {bpsScore}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-xl font-bold">82</p>
+                  <p className="text-xl font-bold">{Math.round(bpsScore * 0.85)}</p>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Points</p>
                 </div>
               </div>
@@ -643,21 +968,24 @@ export default function UserDashboard() {
               <div className="flex items-center gap-3 mb-3">
                 <Coins className="h-5 w-5 text-white" />
                 <div className="flex-1">
-                  <p className="text-base font-bold">{tokenBalance.toLocaleString()} Tokens</p>
+                  <p className="text-base font-bold">{liveTokens.toLocaleString()} Tokens</p>
                   <p className="text-xs text-muted-foreground">Available balance</p>
                 </div>
-                <span className="text-xl font-bold">{tokenBalance.toLocaleString()}</span>
+                <span className="text-xl font-bold">{liveTokens.toLocaleString()}</span>
               </div>
               <div className="space-y-2">
                 {[
-                  { icon: <FileText className="h-3 w-3" />, label: "Allocate estimates" },
-                  { icon: <BarChart2 className="h-3 w-3" />, label: "Gen monthly report" },
-                  { icon: <MessageSquare className="h-3 w-3" />, label: "Consult to advisor" },
-                  { icon: <Lightbulb className="h-3 w-3" />, label: "Get banking recommendations" },
+                  { icon: <Sparkles className="h-3 w-3 text-primary" />, label: "AI Insights", cost: "150 tokens" },
+                  { icon: <BarChart2 className="h-3 w-3" />, label: "Monthly report", cost: "100 tokens" },
+                  { icon: <MessageSquare className="h-3 w-3" />, label: "CPA consultation", cost: "200 tokens" },
+                  { icon: <Lightbulb className="h-3 w-3" />, label: "Banking recommendations", cost: "75 tokens" },
                 ].map((item) => (
-                  <div key={item.label} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    {item.icon}
-                    <span>{item.label}</span>
+                  <div key={item.label} className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      {item.icon}
+                      <span>{item.label}</span>
+                    </div>
+                    <span className="text-amber-400/70">{item.cost}</span>
                   </div>
                 ))}
               </div>
@@ -671,11 +999,12 @@ export default function UserDashboard() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-emerald-500" />
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium flex-1">PAYDEX</span>
-                <span className="text-sm text-emerald-500">Good</span>
+                <span className="text-sm text-muted-foreground">—</span>
                 <span className="text-muted-foreground text-lg">›</span>
               </div>
+              <p className="text-xs text-muted-foreground mt-2">Connect D&B to see your PAYDEX score</p>
             </CardContent>
           </Card>
         </div>

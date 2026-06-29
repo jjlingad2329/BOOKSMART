@@ -1,1 +1,5 @@
-- [Statement import upload flow](statement-import-flow.md) — Transactions (PDF/image only) → statement_imports → n8n; P&L/BS/CF → AI extract → save transactions directly
+- [Dashboard data chain](dashboard-data-chain.md) — numericId (users.auth_id) → orgId (organizations.owner_id) → transactions (org_id). Org query must throw on error or orgId silently stays null.
+- [BPS formula](bps-formula.md) — Business Power Score calculated from txCount, docCount, hasOrg, profileComplete, netPositive, hasPendingReview. Level/rank system 1-10.
+- [AI Insight token gate](ai-insight-token-gate.md) — Unlock costs 150 tokens; calls /api/openai-chat with tx summary; deducts from users.token_balance; refreshes via queryKey ["token_balance", numericId].
+- [pdf-parse version lock](pdf-parse-version.md) — Must use v1.1.1 (v2.x exports class not function). Load via createRequire in route files; add to externals in build.mjs.
+- [Gemini model on OpenRouter](gemini-openrouter.md) — Confirmed working: google/gemini-2.5-flash. google/gemini-2.0-flash-001 and google/gemini-flash-1.5 both 404.
