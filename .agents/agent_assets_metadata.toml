@@ -6,3 +6,9 @@ id = "z6Zm0mcogQcKIPk-tuS7K"
 uri = "file://booksmart-progress-june29-2026.md"
 type = "text"
 title = "BookSmart Progress — June 29, 2026"
+
+[[outputs]]
+id = "ioDiC_3GatRQYp6N-W_pt"
+uri = "file://PROGRESS.md"
+type = "text"
+title = "BookSmart — Development Progress Log"
