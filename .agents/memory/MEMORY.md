@@ -1,3 +1,2 @@
-- [Wouter routing](wouter-routing.md) — Switch+Route with function children unreliable in v3; use direct location map instead.
-- [Supabase Storage uploads](supabase-storage-upload.md) — upload flow: storage.upload → getPublicUrl → insert user_documents row.
-- [users table schema](users-table-schema.md) — columns are first_name/last_name/phone_number NOT full_name/phone; integer id is FK for all other tables
+- [DB schema & FK pattern](db-schema.md) — users.id is bigint PK; all FK columns (user_documents.user_id, transactions.user_id) use integer id NOT auth UUID
+- [AI extraction route](ai-extraction.md) — /api/extract-document uses gpt-4o vision; body limit 15MB; docType pnl/bs/cf; prompts mirror Flutter AIExtractionService

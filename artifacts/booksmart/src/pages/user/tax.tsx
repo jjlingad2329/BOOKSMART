@@ -54,6 +54,9 @@ import {
   X,
   Calendar,
   Loader2,
+  Sparkles,
+  CheckCircle2,
+  SkipForward,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -78,6 +81,81 @@ const CATEGORIES = [
   "Cash Flow Statement",
   "Transactions",
 ] as const;
+
+// ── AI Extraction types ───────────────────────────────────────────────────────
+
+type PnlExtracted = {
+  revenue: number;
+  cost_of_goods_sold: number;
+  gross_profit: number;
+  operating_expenses: number;
+  net_income: number;
+};
+
+type BsExtracted = {
+  assets: { current: number; non_current: number };
+  liabilities: { current: number; long_term: number };
+  equity: number;
+};
+
+type CfExtracted = {
+  operating_activities: number;
+  investing_activities: number;
+  financing_activities: number;
+};
+
+type ExtractedDoc =
+  | { type: "pnl"; data: PnlExtracted }
+  | { type: "bs"; data: BsExtracted }
+  | { type: "cf"; data: CfExtracted };
+
+function categoryToDocType(cat: string): string | null {
+  if (cat === "Profit & Loss" || cat === "Income Statement") return "pnl";
+  if (cat === "Balance Sheet") return "bs";
+  if (cat === "Cash Flow Statement") return "cf";
+  return null;
+}
+
+function fmtMoney(v: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(v);
+}
+
+async function callExtractDocument(
+  file: File,
+  mime: string,
+  docType: string
+): Promise<ExtractedDoc> {
+  const { data: { session } } = await (await import("@/lib/supabase")).supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error("Not authenticated");
+
+  const bytes = await file.arrayBuffer();
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+
+  const BASE = import.meta.env.BASE_URL ?? "/";
+  const url = `${BASE}api/extract-document`.replace(/\/+/g, "/");
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ fileData: base64, mimeType: mime, docType }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
+  }
+
+  const json = await res.json() as { extracted: unknown; docType: string };
+  return { type: json.docType as "pnl" | "bs" | "cf", data: json.extracted } as ExtractedDoc;
+}
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: CURRENT_YEAR - 1959 }, (_, i) =>
@@ -137,22 +215,23 @@ function UploadDialog({ open, onClose, onUploaded, numericUserId, authUuid }: Up
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Form state
   const [pickedFile, setPickedFile] = useState<File | null>(null);
   const [docName, setDocName] = useState("");
   const [category, setCategory] = useState<string>("");
   const [taxYear, setTaxYear] = useState(String(CURRENT_YEAR));
-  const [periodStart, setPeriodStart] = useState(
-    `${CURRENT_YEAR}-01-01`
-  );
-  const [periodEnd, setPeriodEnd] = useState(
-    `${CURRENT_YEAR}-12-31`
-  );
-  const [asOf, setAsOf] = useState(
-    new Date().toISOString().split("T")[0]
-  );
-  const [uploading, setUploading] = useState(false);
+  const [periodStart, setPeriodStart] = useState(`${CURRENT_YEAR}-01-01`);
+  const [periodEnd, setPeriodEnd] = useState(`${CURRENT_YEAR}-12-31`);
+  const [asOf, setAsOf] = useState(new Date().toISOString().split("T")[0]);
+
+  // Multi-step state
+  const [step, setStep] = useState<"form" | "uploading" | "extracting" | "review">("form");
+  const [extracted, setExtracted] = useState<ExtractedDoc | null>(null);
+  const [insertedDocId, setInsertedDocId] = useState<number | null>(null);
+  const [extractError, setExtractError] = useState<string | null>(null);
 
   const isBalanceSheet = category === "Balance Sheet";
+  const busy = step === "uploading" || step === "extracting";
 
   function reset() {
     setPickedFile(null);
@@ -162,9 +241,14 @@ function UploadDialog({ open, onClose, onUploaded, numericUserId, authUuid }: Up
     setPeriodStart(`${CURRENT_YEAR}-01-01`);
     setPeriodEnd(`${CURRENT_YEAR}-12-31`);
     setAsOf(new Date().toISOString().split("T")[0]);
+    setStep("form");
+    setExtracted(null);
+    setInsertedDocId(null);
+    setExtractError(null);
   }
 
   function handleClose() {
+    if (busy) return;
     reset();
     onClose();
   }
@@ -173,9 +257,7 @@ function UploadDialog({ open, onClose, onUploaded, numericUserId, authUuid }: Up
     const f = e.target.files?.[0];
     if (!f) return;
     setPickedFile(f);
-    if (!docName) {
-      setDocName(f.name.replace(/\.[^.]+$/, ""));
-    }
+    if (!docName) setDocName(f.name.replace(/\.[^.]+$/, ""));
   }
 
   function handleYearChange(y: string) {
@@ -187,39 +269,18 @@ function UploadDialog({ open, onClose, onUploaded, numericUserId, authUuid }: Up
   }
 
   async function handleSave() {
-    if (!pickedFile) {
-      toast({ title: "Please select a file", variant: "destructive" });
-      return;
-    }
+    if (!pickedFile) { toast({ title: "Please select a file", variant: "destructive" }); return; }
     const name = docName.trim();
-    if (!name) {
-      toast({ title: "Please enter a document name", variant: "destructive" });
-      return;
-    }
-    if (!category) {
-      toast({ title: "Please select a category", variant: "destructive" });
-      return;
-    }
-    if (!taxYear) {
-      toast({ title: "Please select a year", variant: "destructive" });
-      return;
-    }
-    if (isBalanceSheet && !asOf) {
-      toast({ title: "Please select an As Of date", variant: "destructive" });
-      return;
-    }
+    if (!name) { toast({ title: "Please enter a document name", variant: "destructive" }); return; }
+    if (!category) { toast({ title: "Please select a category", variant: "destructive" }); return; }
+    if (!taxYear) { toast({ title: "Please select a year", variant: "destructive" }); return; }
+    if (isBalanceSheet && !asOf) { toast({ title: "Please select an As Of date", variant: "destructive" }); return; }
     if (!isBalanceSheet) {
-      if (!periodStart || !periodEnd) {
-        toast({ title: "Please select period start and end dates", variant: "destructive" });
-        return;
-      }
-      if (periodEnd < periodStart) {
-        toast({ title: "End date must be on or after start date", variant: "destructive" });
-        return;
-      }
+      if (!periodStart || !periodEnd) { toast({ title: "Please select period dates", variant: "destructive" }); return; }
+      if (periodEnd < periodStart) { toast({ title: "End date must be on or after start date", variant: "destructive" }); return; }
     }
 
-    setUploading(true);
+    setStep("uploading");
     try {
       const mime = guessMime(pickedFile.name);
       const ext = pickedFile.name.split(".").pop() ?? "";
@@ -231,196 +292,359 @@ function UploadDialog({ open, onClose, onUploaded, numericUserId, authUuid }: Up
       const { error: storageError } = await supabase.storage
         .from("documents")
         .upload(storagePath, bytes, { contentType: mime, upsert: false });
-
       if (storageError) throw storageError;
 
-      const { data: urlData } = supabase.storage
-        .from("documents")
-        .getPublicUrl(storagePath);
-
+      const { data: urlData } = supabase.storage.from("documents").getPublicUrl(storagePath);
       const fileUrl = urlData.publicUrl;
 
-      const parsedData: Record<string, string> = { document_category: category };
+      const baseParsedData: Record<string, string> = { document_category: category };
       if (isBalanceSheet) {
-        parsedData.as_of = asOf;
+        baseParsedData.as_of = asOf;
       } else {
-        parsedData.period_start = periodStart;
-        parsedData.period_end = periodEnd;
+        baseParsedData.period_start = periodStart;
+        baseParsedData.period_end = periodEnd;
       }
 
-      const { error: dbError } = await supabase.from("user_documents").insert({
-        user_id: numericUserId,
-        name: finalName,
-        file_url: fileUrl,
-        tax_year: taxYear,
-        category,
-        file_size: pickedFile.size,
-        mime_type: mime,
-        parsed_data: parsedData,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-
+      const { data: inserted, error: dbError } = await supabase
+        .from("user_documents")
+        .insert({
+          user_id: numericUserId,
+          name: finalName,
+          file_url: fileUrl,
+          tax_year: taxYear,
+          category,
+          file_size: pickedFile.size,
+          mime_type: mime,
+          parsed_data: baseParsedData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
       if (dbError) throw dbError;
 
-      toast({ title: "Document uploaded successfully" });
-      reset();
-      onUploaded();
-      onClose();
+      const docId = (inserted as { id: number }).id;
+      setInsertedDocId(docId);
+
+      // Check if this category supports AI extraction
+      const docType = categoryToDocType(category);
+      if (docType) {
+        setStep("extracting");
+        try {
+          const result = await callExtractDocument(pickedFile, mime, docType);
+          setExtracted(result);
+          setStep("review");
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setExtractError(msg);
+          setStep("review"); // show review step with error state
+        }
+      } else {
+        toast({ title: "Document uploaded successfully" });
+        onUploaded();
+        reset();
+        onClose();
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       toast({ title: "Upload failed", description: msg, variant: "destructive" });
-    } finally {
-      setUploading(false);
+      setStep("form");
     }
   }
 
+  async function handleConfirmExtraction() {
+    if (!insertedDocId || !extracted) return;
+    try {
+      // Flatten extracted data into parsed_data
+      const flat: Record<string, unknown> = {};
+      if (extracted.type === "pnl") {
+        Object.assign(flat, extracted.data);
+      } else if (extracted.type === "bs") {
+        const d = extracted.data;
+        flat.assets_current = d.assets.current;
+        flat.assets_non_current = d.assets.non_current;
+        flat.liabilities_current = d.liabilities.current;
+        flat.liabilities_long_term = d.liabilities.long_term;
+        flat.equity = d.equity;
+      } else if (extracted.type === "cf") {
+        Object.assign(flat, extracted.data);
+      }
+      flat.ai_extracted = true;
+      flat.ai_extracted_at = new Date().toISOString();
+
+      await supabase
+        .from("user_documents")
+        .update({ parsed_data: flat, updated_at: new Date().toISOString() })
+        .eq("id", insertedDocId);
+
+      toast({ title: "Extracted data saved to document" });
+    } catch {
+      toast({ title: "Could not save extracted data", variant: "destructive" });
+    }
+    onUploaded();
+    reset();
+    onClose();
+  }
+
+  function handleSkipExtraction() {
+    toast({ title: "Document uploaded successfully" });
+    onUploaded();
+    reset();
+    onClose();
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v && !busy) handleClose(); }}>
       <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Upload Financial Document</DialogTitle>
-        </DialogHeader>
 
-        <div className="space-y-4">
-          {/* File picker zone */}
-          <div
-            className="border-2 border-dashed border-border/60 rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors"
-            onClick={() => fileRef.current?.click()}
-          >
-            {pickedFile ? (
-              <div className="flex items-center justify-center gap-2">
-                <FileUp className="h-5 w-5 text-primary" />
-                <span className="text-sm font-medium truncate max-w-[220px]">
-                  {pickedFile.name}
-                </span>
-                <button
-                  type="button"
-                  className="ml-1 text-muted-foreground hover:text-destructive"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPickedFile(null);
-                    if (fileRef.current) fileRef.current.value = "";
-                  }}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                <FileUp className="h-8 w-8" />
-                <span className="text-sm">Click to select a file</span>
-                <span className="text-xs">PDF, images, spreadsheets, etc.</span>
-              </div>
-            )}
-            <input
-              ref={fileRef}
-              type="file"
-              className="hidden"
-              onChange={handleFilePick}
-            />
-          </div>
-
-          {/* Document name */}
-          <div className="space-y-1.5">
-            <Label>Document Name *</Label>
-            <Input
-              placeholder="e.g. Q4 Profit & Loss 2024"
-              value={docName}
-              onChange={(e) => setDocName(e.target.value)}
-            />
-          </div>
-
-          {/* Category */}
-          <div className="space-y-1.5">
-            <Label>Document Category *</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Tax Year */}
-          <div className="space-y-1.5">
-            <Label>Tax Year</Label>
-            <Select value={taxYear} onValueChange={handleYearChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select year" />
-              </SelectTrigger>
-              <SelectContent className="max-h-48">
-                {YEARS.map((y) => (
-                  <SelectItem key={y} value={y}>
-                    {y}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Date fields */}
-          {isBalanceSheet ? (
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                As Of Date *
-              </Label>
-              <Input
-                type="date"
-                value={asOf}
-                onChange={(e) => setAsOf(e.target.value)}
-              />
+        {/* ── Step: uploading ── */}
+        {step === "uploading" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Uploading Document…</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-4 py-10">
+              <Loader2 className="h-10 w-10 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Saving to storage…</p>
             </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
+          </>
+        )}
+
+        {/* ── Step: extracting ── */}
+        {step === "extracting" && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Analyzing with AI…
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-4 py-10">
+              <div className="relative">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <Sparkles className="absolute inset-0 m-auto h-5 w-5 text-primary" />
+              </div>
+              <p className="text-sm text-muted-foreground text-center max-w-[240px]">
+                GPT-4o is reading your document and extracting financial figures…
+              </p>
+            </div>
+          </>
+        )}
+
+        {/* ── Step: review ── */}
+        {step === "review" && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                AI Extraction Review
+              </DialogTitle>
+            </DialogHeader>
+
+            {extractError ? (
+              <div className="space-y-3 py-2">
+                <p className="text-sm text-destructive">
+                  AI extraction failed: {extractError}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Your document was saved. You can still use it without extracted data.
+                </p>
+              </div>
+            ) : extracted ? (
+              <div className="space-y-3 py-2">
+                <p className="text-xs text-muted-foreground">
+                  Review the figures GPT-4o extracted from your document. Confirm to save them,
+                  or skip to keep only the file.
+                </p>
+                <div className="rounded-md border border-border/50 divide-y divide-border/40">
+                  {extracted.type === "pnl" && (
+                    <>
+                      {[
+                        ["Revenue", extracted.data.revenue],
+                        ["Cost of Goods Sold", extracted.data.cost_of_goods_sold],
+                        ["Gross Profit", extracted.data.gross_profit],
+                        ["Operating Expenses", extracted.data.operating_expenses],
+                        ["Net Income", extracted.data.net_income],
+                      ].map(([label, val]) => (
+                        <div key={label as string} className="flex justify-between px-3 py-2">
+                          <span className="text-sm text-muted-foreground">{label as string}</span>
+                          <span className={`text-sm font-semibold ${(val as number) < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                            {fmtMoney(val as number)}
+                          </span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {extracted.type === "bs" && (
+                    <>
+                      {[
+                        ["Current Assets", extracted.data.assets.current],
+                        ["Non-Current Assets", extracted.data.assets.non_current],
+                        ["Current Liabilities", extracted.data.liabilities.current],
+                        ["Long-Term Liabilities", extracted.data.liabilities.long_term],
+                        ["Equity", extracted.data.equity],
+                      ].map(([label, val]) => (
+                        <div key={label as string} className="flex justify-between px-3 py-2">
+                          <span className="text-sm text-muted-foreground">{label as string}</span>
+                          <span className={`text-sm font-semibold ${(val as number) < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                            {fmtMoney(val as number)}
+                          </span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                  {extracted.type === "cf" && (
+                    <>
+                      {[
+                        ["Operating Activities", extracted.data.operating_activities],
+                        ["Investing Activities", extracted.data.investing_activities],
+                        ["Financing Activities", extracted.data.financing_activities],
+                      ].map(([label, val]) => (
+                        <div key={label as string} className="flex justify-between px-3 py-2">
+                          <span className="text-sm text-muted-foreground">{label as string}</span>
+                          <span className={`text-sm font-semibold ${(val as number) < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                            {fmtMoney(val as number)}
+                          </span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button variant="outline" onClick={handleSkipExtraction} className="gap-1.5">
+                <SkipForward className="h-4 w-4" />
+                {extractError ? "Close" : "Skip"}
+              </Button>
+              {!extractError && extracted && (
+                <Button onClick={handleConfirmExtraction} className="gap-1.5">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Save Extracted Data
+                </Button>
+              )}
+            </DialogFooter>
+          </>
+        )}
+
+        {/* ── Step: form (default) ── */}
+        {step === "form" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Upload Financial Document</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* File picker zone */}
+              <div
+                className="border-2 border-dashed border-border/60 rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors"
+                onClick={() => fileRef.current?.click()}
+              >
+                {pickedFile ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <FileUp className="h-5 w-5 text-primary" />
+                    <span className="text-sm font-medium truncate max-w-[220px]">{pickedFile.name}</span>
+                    <button
+                      type="button"
+                      className="ml-1 text-muted-foreground hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPickedFile(null);
+                        if (fileRef.current) fileRef.current.value = "";
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <FileUp className="h-8 w-8" />
+                    <span className="text-sm">Click to select a file</span>
+                    <span className="text-xs">PDF, images, spreadsheets, etc.</span>
+                  </div>
+                )}
+                <input ref={fileRef} type="file" className="hidden" onChange={handleFilePick} />
+              </div>
+
+              {/* AI extraction badge */}
+              {category && categoryToDocType(category) && (
+                <div className="flex items-center gap-2 rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-xs text-primary">
+                  <Sparkles className="h-3.5 w-3.5 flex-shrink-0" />
+                  AI will automatically extract financial figures from this document
+                </div>
+              )}
+
+              {/* Document name */}
               <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5" />
-                  Period Start *
-                </Label>
+                <Label>Document Name *</Label>
                 <Input
-                  type="date"
-                  value={periodStart}
-                  onChange={(e) => setPeriodStart(e.target.value)}
+                  placeholder="e.g. Q4 Profit & Loss 2024"
+                  value={docName}
+                  onChange={(e) => setDocName(e.target.value)}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5" />
-                  Period End *
-                </Label>
-                <Input
-                  type="date"
-                  value={periodEnd}
-                  onChange={(e) => setPeriodEnd(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-        </div>
 
-        <DialogFooter className="gap-2 pt-2">
-          <Button variant="outline" onClick={handleClose} disabled={uploading}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={uploading} className="min-w-[90px]">
-            {uploading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Uploading…
-              </>
-            ) : (
-              "Upload"
-            )}
-          </Button>
-        </DialogFooter>
+              {/* Category */}
+              <div className="space-y-1.5">
+                <Label>Document Category *</Label>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Tax Year */}
+              <div className="space-y-1.5">
+                <Label>Tax Year</Label>
+                <Select value={taxYear} onValueChange={handleYearChange}>
+                  <SelectTrigger><SelectValue placeholder="Select year" /></SelectTrigger>
+                  <SelectContent className="max-h-48">
+                    {YEARS.map((y) => (
+                      <SelectItem key={y} value={y}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Date fields */}
+              {isBalanceSheet ? (
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" />As Of Date *
+                  </Label>
+                  <Input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />Period Start *
+                    </Label>
+                    <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />Period End *
+                    </Label>
+                    <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="gap-2 pt-2">
+              <Button variant="outline" onClick={handleClose}>Cancel</Button>
+              <Button onClick={handleSave} className="min-w-[90px]">Upload</Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
