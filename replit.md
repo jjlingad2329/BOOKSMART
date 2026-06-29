@@ -15,8 +15,8 @@ AI-powered financial management platform for US freelancers and small businesses
 - pnpm workspaces, Node.js 24, TypeScript 5.9
 - Frontend: React + Vite, Tailwind CSS, shadcn/ui, wouter (routing), TanStack Query, recharts
 - Auth + Data: Supabase (email/password + Google sign-in)
-- API: Express 5 (OpenAI proxy at `/api/openai-chat`)
-- AI: OpenAI (via Express proxy; key stored as `OPENAI_API_KEY` env var)
+- API: Express 5 (OpenRouter proxy at `/api/openai-chat`)
+- AI: OpenRouter (via Express proxy; key stored as `OPENROUTER_API_KEY` env var)
 
 ## Where things live
 
@@ -26,14 +26,14 @@ AI-powered financial management platform for US freelancers and small businesses
 - `artifacts/booksmart/src/hooks/use-auth.tsx` — Supabase auth hook + AuthProvider
 - `artifacts/booksmart/src/lib/supabase.ts` — Supabase client (URL + anon key)
 - `artifacts/booksmart/src/index.css` — BookSmart theme (dark navy + gold color palette)
-- `artifacts/api-server/src/routes/openai-chat.ts` — OpenAI proxy route
+- `artifacts/api-server/src/routes/openai-chat.ts` — OpenRouter proxy route (uses `OPENROUTER_API_KEY`)
 
 ## Architecture decisions
 
 - **No Replit DB / Drizzle** — all data lives in Supabase; `lib/db/` is unused.
 - **Flutter → React conversion** — original app was Flutter Web; rewritten in React+Vite to run on Replit.
 - **Role-based routing** — `user`, `cpa`, `admin` roles read from Supabase user metadata; router redirects to the correct dashboard on login.
-- **OpenAI via proxy** — frontend calls `/api/openai-chat` (Express); the API key never reaches the browser.
+- **OpenRouter via proxy** — frontend calls `/api/openai-chat` (Express); the `OPENROUTER_API_KEY` never reaches the browser. Uses `openai/gpt-4o-mini` model by default.
 - **Dark mode default** — ThemeProvider defaults to dark, persisted in localStorage.
 
 ## Product
