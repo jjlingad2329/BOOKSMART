@@ -317,7 +317,8 @@ function StatementReviewDialog({
   async function approveRow(row: PendingTx) {
     setApprovingId(row.id);
     try {
-      await supabase.from("transactions").insert({
+      // Supabase JS never throws — always check { error }
+      const { error: insertError } = await supabase.from("transactions").insert({
         user_id: row.user_id,
         org_id: row.org_id,
         title: row.title,
@@ -328,11 +329,19 @@ function StatementReviewDialog({
         date_time: row.date_time,
         is_ai_verified: false,
       });
-      await supabase.from("pending_transactions").delete().eq("id", row.id);
+      if (insertError) throw new Error(insertError.message);
+
+      const { error: deleteError } = await supabase
+        .from("pending_transactions")
+        .delete()
+        .eq("id", row.id);
+      if (deleteError) throw new Error(deleteError.message);
+
       setRows((prev) => prev.filter((r) => r.id !== row.id));
       invalidateDashboard();
-    } catch {
-      toast({ title: "Failed to approve transaction", variant: "destructive" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast({ title: "Failed to approve transaction", description: msg, variant: "destructive" });
     } finally {
       setApprovingId(null);
     }
@@ -639,24 +648,6 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
 
         if (!importError && importData) {
           const newImportId = (importData as { id: number }).id;
-          // Fire-and-forget: scan the statement via our API (GPT-4o extraction).
-          // The StatementReviewDialog polls statement_imports.status and will
-          // show the results once the endpoint marks it "completed".
-          (async () => {
-            try {
-              const { data: { session } } = await supabase.auth.getSession();
-              const token = session?.access_token;
-              if (!token) return;
-              const base64 = await fileToBase64(pickedFile);
-              await fetch("/api/scan-statement", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ importId: newImportId, fileData: base64, mimeType: mime }),
-              });
-            } catch {
-              // scan failed — the StatementReviewDialog will time out gracefully
-            }
-          })();
           onUploaded();
           reset();
           onClose();
