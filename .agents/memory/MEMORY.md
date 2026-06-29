@@ -1,0 +1,2 @@
+- [Wouter routing](wouter-routing.md) — Switch+Route with function children unreliable in v3; use direct location map instead.
+- [Supabase Storage uploads](supabase-storage-upload.md) — upload flow: storage.upload → getPublicUrl → insert user_documents row.

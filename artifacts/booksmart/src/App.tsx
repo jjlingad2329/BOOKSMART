@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -52,36 +52,46 @@ import AdminChat from "@/pages/admin/chat";
 
 const queryClient = new QueryClient();
 
-// Wrap a page in AuthGuard + DashboardLayout
-function UserPage({ component: Page }: { component: React.ComponentType }) {
-  return (
-    <AuthGuard requiredRole="user">
-      <DashboardLayout role="user">
-        <Page />
-      </DashboardLayout>
-    </AuthGuard>
-  );
-}
+type Role = "user" | "cpa" | "admin";
 
-function CpaPage({ component: Page }: { component: React.ComponentType }) {
-  return (
-    <AuthGuard requiredRole="cpa">
-      <DashboardLayout role="cpa">
-        <Page />
-      </DashboardLayout>
-    </AuthGuard>
-  );
-}
-
-function AdminPage({ component: Page }: { component: React.ComponentType }) {
-  return (
-    <AuthGuard requiredRole="admin">
-      <DashboardLayout role="admin">
-        <Page />
-      </DashboardLayout>
-    </AuthGuard>
-  );
-}
+// Route table: path → { role, component }
+type RouteEntry = { role: Role; component: React.ComponentType };
+const USER_ROUTES: Record<string, RouteEntry> = {
+  "/user": { role: "user", component: UserDashboard },
+  "/user/ai-strategy": { role: "user", component: AiStrategy },
+  "/user/ai-chat": { role: "user", component: AiChat },
+  "/user/chat": { role: "user", component: Chat },
+  "/user/cpa-network": { role: "user", component: CpaNetwork },
+  "/user/reports": { role: "user", component: Reports },
+  "/user/tax": { role: "user", component: Tax },
+  "/user/orders": { role: "user", component: Orders },
+  "/user/token": { role: "user", component: Token },
+  "/user/settings": { role: "user", component: Settings },
+  "/user/profile": { role: "user", component: Profile },
+  "/user/organizations": { role: "user", component: Organizations },
+  "/user/subscription": { role: "user", component: Subscription },
+  "/user/bulk-review": { role: "user", component: BulkReview },
+  "/user/rules-management": { role: "user", component: RulesManagement },
+};
+const CPA_ROUTES: Record<string, RouteEntry> = {
+  "/cpa": { role: "cpa", component: CpaDashboard },
+  "/cpa/leads": { role: "cpa", component: CpaLeads },
+  "/cpa/orders": { role: "cpa", component: CpaOrders },
+  "/cpa/earnings": { role: "cpa", component: CpaEarnings },
+  "/cpa/chat": { role: "cpa", component: CpaChat },
+  "/cpa/settings": { role: "cpa", component: CpaSettings },
+  "/cpa/profile": { role: "cpa", component: CpaProfile },
+};
+const ADMIN_ROUTES: Record<string, RouteEntry> = {
+  "/admin": { role: "admin", component: AdminDashboard },
+  "/admin/users": { role: "admin", component: AdminUsers },
+  "/admin/cpas": { role: "admin", component: AdminCpas },
+  "/admin/categories": { role: "admin", component: AdminCategories },
+  "/admin/tax-deductions": { role: "admin", component: AdminTaxDeductions },
+  "/admin/settings": { role: "admin", component: AdminSettings },
+  "/admin/chat": { role: "admin", component: AdminChat },
+};
+const ALL_ROUTES = { ...USER_ROUTES, ...CPA_ROUTES, ...ADMIN_ROUTES };
 
 function Router() {
   const { session, profile, isLoading } = useAuth();
@@ -98,52 +108,29 @@ function Router() {
     }
   }, [isLoading, session, profile, location, setLocation]);
 
-  return (
-    <Switch>
-      {/* Auth */}
-      <Route path="/login" component={Login} />
-      <Route path="/sign-up" component={SignUp} />
-      <Route path="/forgot-reset" component={ForgotReset} />
-      <Route path="/verify-email" component={VerifyEmail} />
+  // Auth routes (no guard)
+  if (location === "/login") return <Login />;
+  if (location === "/sign-up") return <SignUp />;
+  if (location === "/forgot-reset") return <ForgotReset />;
+  if (location === "/verify-email") return <VerifyEmail />;
 
-      {/* User */}
-      <Route path="/user">{() => <UserPage component={UserDashboard} />}</Route>
-      <Route path="/user/ai-strategy">{() => <UserPage component={AiStrategy} />}</Route>
-      <Route path="/user/ai-chat">{() => <UserPage component={AiChat} />}</Route>
-      <Route path="/user/chat">{() => <UserPage component={Chat} />}</Route>
-      <Route path="/user/cpa-network">{() => <UserPage component={CpaNetwork} />}</Route>
-      <Route path="/user/reports">{() => <UserPage component={Reports} />}</Route>
-      <Route path="/user/tax">{() => <UserPage component={Tax} />}</Route>
-      <Route path="/user/orders">{() => <UserPage component={Orders} />}</Route>
-      <Route path="/user/token">{() => <UserPage component={Token} />}</Route>
-      <Route path="/user/settings">{() => <UserPage component={Settings} />}</Route>
-      <Route path="/user/profile">{() => <UserPage component={Profile} />}</Route>
-      <Route path="/user/organizations">{() => <UserPage component={Organizations} />}</Route>
-      <Route path="/user/subscription">{() => <UserPage component={Subscription} />}</Route>
-      <Route path="/user/bulk-review">{() => <UserPage component={BulkReview} />}</Route>
-      <Route path="/user/rules-management">{() => <UserPage component={RulesManagement} />}</Route>
+  // Dashboard routes
+  const matched = ALL_ROUTES[location];
+  if (matched) {
+    const { role, component: Page } = matched;
+    return (
+      <AuthGuard requiredRole={role}>
+        <DashboardLayout role={role}>
+          <Page />
+        </DashboardLayout>
+      </AuthGuard>
+    );
+  }
 
-      {/* CPA */}
-      <Route path="/cpa">{() => <CpaPage component={CpaDashboard} />}</Route>
-      <Route path="/cpa/leads">{() => <CpaPage component={CpaLeads} />}</Route>
-      <Route path="/cpa/orders">{() => <CpaPage component={CpaOrders} />}</Route>
-      <Route path="/cpa/earnings">{() => <CpaPage component={CpaEarnings} />}</Route>
-      <Route path="/cpa/chat">{() => <CpaPage component={CpaChat} />}</Route>
-      <Route path="/cpa/settings">{() => <CpaPage component={CpaSettings} />}</Route>
-      <Route path="/cpa/profile">{() => <CpaPage component={CpaProfile} />}</Route>
+  // Root redirect (loading state or unmatched during redirect)
+  if (location === "/") return null;
 
-      {/* Admin */}
-      <Route path="/admin">{() => <AdminPage component={AdminDashboard} />}</Route>
-      <Route path="/admin/users">{() => <AdminPage component={AdminUsers} />}</Route>
-      <Route path="/admin/cpas">{() => <AdminPage component={AdminCpas} />}</Route>
-      <Route path="/admin/categories">{() => <AdminPage component={AdminCategories} />}</Route>
-      <Route path="/admin/tax-deductions">{() => <AdminPage component={AdminTaxDeductions} />}</Route>
-      <Route path="/admin/settings">{() => <AdminPage component={AdminSettings} />}</Route>
-      <Route path="/admin/chat">{() => <AdminPage component={AdminChat} />}</Route>
-
-      <Route component={NotFound} />
-    </Switch>
-  );
+  return <NotFound />;
 }
 
 function App() {
