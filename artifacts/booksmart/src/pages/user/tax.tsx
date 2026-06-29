@@ -124,6 +124,19 @@ function fmtMoney(v: number) {
   }).format(v);
 }
 
+/** Safely converts a File to a base64 string using FileReader (no stack overflow). */
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      resolve(dataUrl.split(",")[1]); // strip "data:...;base64," prefix
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function callExtractDocument(
   file: File,
   mime: string,
@@ -135,15 +148,7 @@ async function callExtractDocument(
 
   // Use FileReader to safely base64-encode any file size.
   // btoa(String.fromCharCode(...bytes)) stack-overflows on large PDFs.
-  const base64 = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      resolve(dataUrl.split(",")[1]); // strip "data:...;base64," prefix
-    };
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsDataURL(file);
-  });
+  const base64 = await fileToBase64(file);
 
   const res = await fetch("/api/extract-document", {
     method: "POST",
@@ -633,10 +638,29 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
           .single();
 
         if (!importError && importData) {
+          const newImportId = (importData as { id: number }).id;
+          // Fire-and-forget: scan the statement via our API (GPT-4o extraction).
+          // The StatementReviewDialog polls statement_imports.status and will
+          // show the results once the endpoint marks it "completed".
+          (async () => {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              const token = session?.access_token;
+              if (!token) return;
+              const base64 = await fileToBase64(pickedFile);
+              await fetch("/api/scan-statement", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ importId: newImportId, fileData: base64, mimeType: mime }),
+              });
+            } catch {
+              // scan failed — the StatementReviewDialog will time out gracefully
+            }
+          })();
           onUploaded();
           reset();
           onClose();
-          onImportCreated((importData as { id: number }).id);
+          onImportCreated(newImportId);
           return;
         }
         // Fallback if insert failed — just close
