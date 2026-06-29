@@ -4,7 +4,10 @@ import { createRequire } from "node:module";
 
 const _require = createRequire(import.meta.url);
 type PdfParseResult = { text: string; numpages: number };
-const pdfParse = _require("pdf-parse") as (buf: Buffer) => Promise<PdfParseResult>;
+// pdf-parse CJS module may expose the function as module.exports directly
+// OR as module.exports.default depending on the bundler context
+const _pdfParseMod = _require("pdf-parse");
+const pdfParse = (typeof _pdfParseMod === "function" ? _pdfParseMod : _pdfParseMod.default) as (buf: Buffer) => Promise<PdfParseResult>;
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -61,7 +64,7 @@ router.post("/extract-text", requireAuth, async (req, res) => {
               "X-Title": "BookSmart",
             },
             body: JSON.stringify({
-              model: "google/gemini-2.0-flash-001",
+              model: "google/gemini-flash-1.5",
               messages: [
                 {
                   role: "user",
