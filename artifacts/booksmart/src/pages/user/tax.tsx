@@ -624,8 +624,9 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
         category === "Transactions" &&
         (mime === "application/pdf" || mime.startsWith("image/"))
       ) {
-        // Bank statement / Transactions → insert into statement_imports to
-        // trigger the n8n webhook; navigate to the Statement Review screen.
+        // Bank statement / Transactions → extract PDF text, then insert into
+        // statement_imports to trigger the n8n webhook.
+        // n8n reads extracted_text and forwards it to GPT — so we must populate it.
         const { data: orgData, error: orgError } = await supabase
           .from("organizations")
           .select("id")
@@ -641,7 +642,32 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
           throw new Error("No organization found for your account. Please contact support.");
         }
 
-        const isScanned = mime.startsWith("image/");
+        // Extract raw text from the PDF so n8n can send it to GPT
+        let extractedText: string | null = null;
+        let isScanned = mime.startsWith("image/");
+        if (mime === "application/pdf") {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token;
+            const base64 = await fileToBase64(pickedFile);
+            const textRes = await fetch("/api/extract-text", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({ fileData: base64 }),
+            });
+            if (textRes.ok) {
+              const payload = await textRes.json() as { text: string; isScanned: boolean };
+              extractedText = payload.text || null;
+              isScanned = payload.isScanned;
+            }
+          } catch (e) {
+            console.warn("[upload] pdf text extraction failed, continuing without text:", e);
+          }
+        }
+
         const { data: importData, error: importError } = await supabase
           .from("statement_imports")
           .insert({
@@ -651,7 +677,7 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
             document_path: storagePath,
             mime_type: mime,
             is_scanned: isScanned,
-            extracted_text: null,
+            extracted_text: extractedText,
             status: "processing",
           })
           .select("id")
