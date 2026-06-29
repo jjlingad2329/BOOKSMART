@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -206,6 +207,29 @@ export default function UserDashboard() {
   const { user, profile } = useAuth();
   const numericId = profile?.numericId ?? null;
   const tokenBalance = profile?.token_balance ?? 0;
+  const qc = useQueryClient();
+
+  // Real-time: invalidate transaction queries when n8n writes new transactions
+  useEffect(() => {
+    if (!numericId) return;
+    const channel = supabase
+      .channel(`transactions:user_${numericId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "transactions",
+          filter: `user_id=eq.${numericId}`,
+        },
+        () => {
+          qc.invalidateQueries({ queryKey: ["tx_month", numericId] });
+          qc.invalidateQueries({ queryKey: ["tx_recent", numericId] });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [numericId, qc]);
 
   // Current-month transactions (for income / expense summary)
   const { data: monthTxs = [], isLoading: monthLoading } = useQuery<Transaction[]>({

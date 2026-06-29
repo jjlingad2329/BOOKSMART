@@ -136,10 +136,7 @@ async function callExtractDocument(
   const bytes = await file.arrayBuffer();
   const base64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
 
-  const BASE = import.meta.env.BASE_URL ?? "/";
-  const url = `${BASE}api/extract-document`.replace(/\/+/g, "/");
-
-  const res = await fetch(url, {
+  const res = await fetch("/api/extract-document", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -325,6 +322,22 @@ function UploadDialog({ open, onClose, onUploaded, numericUserId, authUuid }: Up
 
       const docId = (inserted as { id: number }).id;
       setInsertedDocId(docId);
+
+      // Insert into statement_imports so the n8n webhook is triggered.
+      // Supabase database webhooks watch this table for INSERT events.
+      await supabase.from("statement_imports").insert({
+        user_id: numericUserId,
+        document_id: docId,
+        document_path: storagePath,
+        mime_type: mime,
+        status: "processing",
+        is_scanned: false,
+        extracted_text: "",
+        rows_approved: 0,
+        rows_rejected: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
 
       // Check if this category supports AI extraction
       const docType = categoryToDocType(category);
