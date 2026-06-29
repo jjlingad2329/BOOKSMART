@@ -568,7 +568,7 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
       const { error: storageError } = await supabase.storage
         .from("documents")
         .upload(storagePath, bytes, { contentType: mime, upsert: false });
-      if (storageError) throw storageError;
+      if (storageError) throw new Error(storageError.message ?? String(storageError));
 
       const { data: urlData } = supabase.storage.from("documents").getPublicUrl(storagePath);
       const fileUrl = urlData.publicUrl;
@@ -597,7 +597,7 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
         })
         .select("id")
         .single();
-      if (dbError) throw dbError;
+      if (dbError) throw new Error(dbError.message ?? String(dbError));
 
       const docId = (inserted as { id: number }).id;
       setInsertedDocId(docId);
@@ -635,7 +635,7 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
           .from("statement_imports")
           .insert({
             user_id: numericUserId,
-            ...(orgId !== null ? { org_id: orgId } : {}),
+            org_id: orgId,
             document_id: docId,
             document_path: storagePath,
             mime_type: mime,
@@ -646,19 +646,14 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
           .select("id")
           .single();
 
-        if (!importError && importData) {
-          const newImportId = (importData as { id: number }).id;
-          onUploaded();
-          reset();
-          onClose();
-          onImportCreated(newImportId);
-          return;
-        }
-        // Fallback if insert failed — just close
-        toast({ title: "Document uploaded. Statement import pending." });
+        if (importError) throw new Error(importError.message);
+
+        const newImportId = (importData as { id: number }).id;
         onUploaded();
         reset();
         onClose();
+        onImportCreated(newImportId);
+        return;
       } else {
         // Any other category — just store the document
         toast({ title: "Document uploaded successfully" });
