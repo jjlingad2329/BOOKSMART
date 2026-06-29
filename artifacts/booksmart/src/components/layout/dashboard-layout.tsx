@@ -123,8 +123,8 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
               <div className="text-sm font-semibold tracking-wide text-primary">COMMAND CENTER</div>
             </div>
           </header>
-          <div className="flex-1 overflow-auto p-4 md:p-8">
-            <div className="max-w-7xl mx-auto">
+          <div className="flex-1 overflow-auto p-2 md:p-4">
+            <div className="w-full">
               {children}
             </div>
           </div>
