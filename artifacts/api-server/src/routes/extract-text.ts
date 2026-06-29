@@ -6,6 +6,8 @@ const _require = createRequire(import.meta.url);
 type PdfParseResult = { text: string; numpages: number };
 const pdfParse = _require("pdf-parse") as (buf: Buffer) => Promise<PdfParseResult>;
 
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
 const router = Router();
 
 /**
@@ -13,8 +15,9 @@ const router = Router();
  * Body: { fileData: string }  — base64 data-URL of a PDF
  * Returns: { text: string, isScanned: boolean }
  *
- * Used by the frontend to extract raw text from a PDF before inserting it into
- * statement_imports.extracted_text so n8n can forward it to GPT.
+ * Step 1: pdf-parse (fast, works for text-layer PDFs)
+ * Step 2: If text is empty/short (scanned image PDF) → Gemini Flash vision
+ *         via OpenRouter. Gemini can read scanned PDFs natively.
  */
 router.post("/extract-text", requireAuth, async (req, res) => {
   try {
@@ -28,14 +31,76 @@ router.post("/extract-text", requireAuth, async (req, res) => {
     const buffer = Buffer.from(base64, "base64");
 
     let text = "";
+
+    // ── Step 1: pdf-parse text extraction ────────────────────────────────────
     try {
       const result = await pdfParse(buffer);
       text = (result.text ?? "").trim();
-    } catch {
+      console.log(`[extract-text] pdf-parse got ${text.length} chars`);
+    } catch (e) {
+      console.warn("[extract-text] pdf-parse failed:", e);
       text = "";
     }
 
     const isScanned = text.length < 50;
+
+    // ── Step 2: Gemini vision fallback for scanned PDFs ───────────────────────
+    if (isScanned) {
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      if (!apiKey) {
+        console.warn("[extract-text] No OPENROUTER_API_KEY — cannot use vision fallback");
+      } else {
+        console.log("[extract-text] Scanned PDF — using Gemini vision fallback");
+        try {
+          const visionRes = await fetch(OPENROUTER_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+              "HTTP-Referer": "https://booksmart.app",
+              "X-Title": "BookSmart",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.0-flash-001",
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "image_url",
+                      image_url: {
+                        url: `data:application/pdf;base64,${base64}`,
+                      },
+                    },
+                    {
+                      type: "text",
+                      text: "This is a bank statement. Please extract ALL transactions from it as plain text. For each transaction include: date, description/merchant name, and amount (negative for debits/withdrawals, positive for credits/deposits). Return only the raw transaction data as plain text — no markdown, no headings, no explanations.",
+                    },
+                  ],
+                },
+              ],
+            }),
+          });
+
+          if (visionRes.ok) {
+            const visionData = (await visionRes.json()) as {
+              choices?: { message?: { content?: string } }[];
+            };
+            const extracted = visionData.choices?.[0]?.message?.content ?? "";
+            console.log(`[extract-text] Gemini vision got ${extracted.length} chars`);
+            if (extracted.length > 10) {
+              text = extracted;
+            }
+          } else {
+            const errBody = await visionRes.text();
+            console.warn(`[extract-text] Gemini vision error ${visionRes.status}:`, errBody);
+          }
+        } catch (e) {
+          console.warn("[extract-text] Gemini vision fallback threw:", e);
+        }
+      }
+    }
+
     res.json({ text, isScanned });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
