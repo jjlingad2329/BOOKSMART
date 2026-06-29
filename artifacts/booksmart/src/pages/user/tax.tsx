@@ -563,12 +563,13 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
       const finalName = name.toLowerCase().endsWith(`.${ext}`) ? name : `${name}.${ext}`;
       const storagePath = `${authUuid}/${Date.now()}_${finalName}`;
 
-      const bytes = await pickedFile.arrayBuffer();
-
       const { error: storageError } = await supabase.storage
         .from("documents")
-        .upload(storagePath, bytes, { contentType: mime, upsert: false });
-      if (storageError) throw new Error(storageError.message ?? String(storageError));
+        .upload(storagePath, pickedFile, { contentType: mime, upsert: false });
+      if (storageError) {
+        console.error("[upload] storage error:", storageError);
+        throw new Error(storageError.message ?? String(storageError));
+      }
 
       const { data: urlData } = supabase.storage.from("documents").getPublicUrl(storagePath);
       const fileUrl = urlData.publicUrl;
@@ -597,7 +598,10 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
         })
         .select("id")
         .single();
-      if (dbError) throw new Error(dbError.message ?? String(dbError));
+      if (dbError) {
+        console.error("[upload] user_documents error:", dbError);
+        throw new Error(dbError.message ?? String(dbError));
+      }
 
       const docId = (inserted as { id: number }).id;
       setInsertedDocId(docId);
@@ -622,13 +626,20 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
       ) {
         // Bank statement / Transactions → insert into statement_imports to
         // trigger the n8n webhook; navigate to the Statement Review screen.
-        const { data: orgData } = await supabase
+        const { data: orgData, error: orgError } = await supabase
           .from("organizations")
           .select("id")
           .eq("owner_id", numericUserId)
           .limit(1)
           .maybeSingle();
+        if (orgError) {
+          console.error("[upload] org lookup error:", orgError);
+          throw new Error(`Could not find your organization: ${orgError.message}`);
+        }
         const orgId = (orgData as { id: number } | null)?.id ?? null;
+        if (orgId === null) {
+          throw new Error("No organization found for your account. Please contact support.");
+        }
 
         const isScanned = mime.startsWith("image/");
         const { data: importData, error: importError } = await supabase
@@ -640,13 +651,16 @@ function UploadDialog({ open, onClose, onUploaded, onImportCreated, numericUserI
             document_path: storagePath,
             mime_type: mime,
             is_scanned: isScanned,
-            extracted_text: isScanned ? null : "",
+            extracted_text: null,
             status: "processing",
           })
           .select("id")
           .single();
 
-        if (importError) throw new Error(importError.message);
+        if (importError) {
+          console.error("[upload] statement_imports error:", importError);
+          throw new Error(importError.message);
+        }
 
         const newImportId = (importData as { id: number }).id;
         onUploaded();
