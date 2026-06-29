@@ -3,20 +3,22 @@ import { Router } from "express";
 const router = Router();
 
 router.post("/openai-chat", async (req, res) => {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
-    res.status(500).json({ error: "missing_openai_key" });
+    res.status(500).json({ error: "missing_openrouter_key" });
     return;
   }
 
   const payload = req.body;
 
   try {
-    const upstream = await fetch("https://api.openai.com/v1/chat/completions", {
+    const upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey.trim()}`,
+        "HTTP-Referer": "https://booksmart.replit.app",
+        "X-Title": "BookSmart",
       },
       body: JSON.stringify(payload),
     });

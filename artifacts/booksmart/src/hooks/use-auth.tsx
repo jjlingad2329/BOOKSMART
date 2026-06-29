@@ -65,14 +65,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchProfile = async (userId: string) => {
     try {
+      // Try the profiles table first; fall back to user metadata if it doesn't exist
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
         .single();
-        
+
       if (error) {
-        console.error("Error fetching profile:", error);
+        // Table missing or row not found — build a minimal profile from auth metadata
+        const { data: { user } } = await supabase.auth.getUser();
+        const meta = user?.user_metadata ?? {};
+        setProfile({
+          id: userId,
+          email: user?.email ?? "",
+          full_name: meta.full_name ?? meta.name ?? "",
+          role: (meta.role as UserProfile["role"]) ?? "user",
+          token_balance: meta.token_balance ?? 0,
+          phone: meta.phone,
+        });
       } else {
         setProfile(data as UserProfile);
       }
