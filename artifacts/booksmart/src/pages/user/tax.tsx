@@ -974,13 +974,34 @@ export default function Tax() {
 
   const deleteMutation = useMutation({
     mutationFn: async (doc: UserDocument) => {
+      // 1. Find any statement_imports rows for this document
+      const { data: imports } = await supabase
+        .from("statement_imports")
+        .select("id")
+        .eq("document_id", doc.id);
+
+      if (imports && imports.length > 0) {
+        const importIds = (imports as { id: number }[]).map((r) => r.id);
+        // 2. Delete associated pending_transactions first (FK from statement_imports)
+        await supabase
+          .from("pending_transactions")
+          .delete()
+          .in("import_id", importIds);
+        // 3. Delete the statement_imports rows (FK from user_documents)
+        await supabase
+          .from("statement_imports")
+          .delete()
+          .in("id", importIds);
+      }
+
+      // 4. Now delete the document row
       const { error } = await supabase
         .from("user_documents")
         .delete()
         .eq("id", doc.id);
       if (error) throw error;
 
-      // Best-effort delete from storage (ignore errors if path differs)
+      // 5. Best-effort delete from storage
       try {
         const url = new URL(doc.file_url);
         const pathParts = url.pathname.split("/documents/");
