@@ -61,7 +61,7 @@ import { useToast } from "@/hooks/use-toast";
 
 type UserDocument = {
   id: number;
-  user_id: string;
+  user_id: number;
   name: string;
   file_url: string;
   category: string | null;
@@ -129,10 +129,11 @@ type UploadDialogProps = {
   open: boolean;
   onClose: () => void;
   onUploaded: () => void;
-  userId: string;
+  numericUserId: number;
+  authUuid: string; // used only for storage path namespacing
 };
 
-function UploadDialog({ open, onClose, onUploaded, userId }: UploadDialogProps) {
+function UploadDialog({ open, onClose, onUploaded, numericUserId, authUuid }: UploadDialogProps) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -223,7 +224,7 @@ function UploadDialog({ open, onClose, onUploaded, userId }: UploadDialogProps) 
       const mime = guessMime(pickedFile.name);
       const ext = pickedFile.name.split(".").pop() ?? "";
       const finalName = name.toLowerCase().endsWith(`.${ext}`) ? name : `${name}.${ext}`;
-      const storagePath = `${userId}/${Date.now()}_${finalName}`;
+      const storagePath = `${authUuid}/${Date.now()}_${finalName}`;
 
       const bytes = await pickedFile.arrayBuffer();
 
@@ -248,7 +249,7 @@ function UploadDialog({ open, onClose, onUploaded, userId }: UploadDialogProps) 
       }
 
       const { error: dbError } = await supabase.from("user_documents").insert({
-        user_id: userId,
+        user_id: numericUserId,
         name: finalName,
         file_url: fileUrl,
         tax_year: taxYear,
@@ -428,7 +429,8 @@ function UploadDialog({ open, onClose, onUploaded, userId }: UploadDialogProps) 
 // ── Main Tax page ─────────────────────────────────────────────────────────────
 
 export default function Tax() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const numericId = profile?.numericId ?? null;
   const qc = useQueryClient();
   const { toast } = useToast();
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -436,14 +438,14 @@ export default function Tax() {
   const [filterYear, setFilterYear] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
 
-  const { data: docs = [], isLoading } = useQuery<UserDocument[]>({
-    queryKey: ["user_documents", user?.id],
-    enabled: !!user?.id,
+  const { data: docs = [], isLoading, error: queryError } = useQuery<UserDocument[]>({
+    queryKey: ["user_documents", numericId],
+    enabled: numericId !== null,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("user_documents")
         .select("*")
-        .eq("user_id", user!.id)
+        .eq("user_id", numericId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -468,7 +470,7 @@ export default function Tax() {
       } catch {}
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["user_documents", user?.id] });
+      qc.invalidateQueries({ queryKey: ["user_documents", numericId] });
       toast({ title: "Document deleted" });
     },
     onError: (e: Error) => {
@@ -560,12 +562,25 @@ export default function Tax() {
               <div className="flex justify-center items-center py-16">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
+            ) : queryError ? (
+              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <FolderOpen className="h-12 w-12 mb-3 opacity-40" />
+                <p className="text-sm text-destructive font-medium mb-1">Could not load documents</p>
+                <p className="text-xs text-center max-w-xs">
+                  {(queryError as Error).message}
+                </p>
+              </div>
+            ) : numericId === null ? (
+              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <FolderOpen className="h-12 w-12 mb-3 opacity-40" />
+                <p className="text-sm">Your account profile is still loading…</p>
+              </div>
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <FolderOpen className="h-12 w-12 mb-3 opacity-40" />
                 <p className="text-sm">
                   {docs.length === 0
-                    ? "No documents yet. Tap Upload to add one."
+                    ? "No documents yet. Click Upload to add one."
                     : "No documents match your filters."}
                 </p>
               </div>
@@ -693,14 +708,15 @@ export default function Tax() {
         </div>
       </div>
 
-      {user && (
+      {user && numericId !== null && (
         <UploadDialog
           open={uploadOpen}
           onClose={() => setUploadOpen(false)}
           onUploaded={() =>
-            qc.invalidateQueries({ queryKey: ["user_documents", user.id] })
+            qc.invalidateQueries({ queryKey: ["user_documents", numericId] })
           }
-          userId={user.id}
+          numericUserId={numericId}
+          authUuid={user.id}
         />
       )}
     </div>

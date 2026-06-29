@@ -2,8 +2,9 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { User, Session } from "@supabase/supabase-js";
 
-type UserProfile = {
-  id: string;
+export type UserProfile = {
+  id: string;          // Supabase auth UUID
+  numericId: number | null;  // public.users.id (bigint) — used in all FK columns
   email: string;
   full_name: string;
   role: "user" | "cpa" | "admin";
@@ -38,7 +39,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setUser(session?.user || null);
-      
       if (session?.user) {
         fetchProfile(session.user.id);
       } else {
@@ -63,32 +63,57 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (authUuid: string) => {
     try {
-      // Try the profiles table first; fall back to user metadata if it doesn't exist
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
+      // 1. Try public.users (Flutter schema) — integer id + auth_id UUID
+      const { data: appUser, error: appUserError } = await supabase
+        .from("users")
+        .select("id, email, full_name, role, token_balance, phone")
+        .eq("auth_id", authUuid)
         .single();
 
-      if (error) {
-        // Table missing or row not found — build a minimal profile from auth metadata
-        const { data: { user } } = await supabase.auth.getUser();
-        const meta = user?.user_metadata ?? {};
+      if (!appUserError && appUser) {
         setProfile({
-          id: userId,
-          email: user?.email ?? "",
-          full_name: meta.full_name ?? meta.name ?? "",
-          role: (meta.role as UserProfile["role"]) ?? "user",
-          token_balance: meta.token_balance ?? 0,
-          phone: meta.phone,
+          id: authUuid,
+          numericId: appUser.id as number,
+          email: appUser.email ?? "",
+          full_name: appUser.full_name ?? "",
+          role: (appUser.role as UserProfile["role"]) ?? "user",
+          token_balance: appUser.token_balance ?? 0,
+          phone: appUser.phone,
         });
-      } else {
-        setProfile(data as UserProfile);
+        return;
       }
+
+      // 2. Try profiles table (alternative schema)
+      const { data: profileRow, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", authUuid)
+        .single();
+
+      if (!profileError && profileRow) {
+        setProfile({
+          ...(profileRow as Omit<UserProfile, "numericId">),
+          numericId: null,
+        });
+        return;
+      }
+
+      // 3. Fall back to auth metadata
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const meta = authUser?.user_metadata ?? {};
+      setProfile({
+        id: authUuid,
+        numericId: null,
+        email: authUser?.email ?? "",
+        full_name: meta.full_name ?? meta.name ?? "",
+        role: (meta.role as UserProfile["role"]) ?? "user",
+        token_balance: meta.token_balance ?? 0,
+        phone: meta.phone,
+      });
     } catch (e) {
-      console.error(e);
+      console.error("fetchProfile error:", e);
     } finally {
       setIsLoading(false);
     }
