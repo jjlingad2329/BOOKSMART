@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "z6Zm0mcogQcKIPk-tuS7K"
+uri = "file://booksmart-progress-june29-2026.md"
+type = "text"
+title = "BookSmart Progress — June 29, 2026"
