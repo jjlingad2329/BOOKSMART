@@ -1,5 +1,11 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/require-auth";
+import { createRequire } from "node:module";
+
+// pdf-parse is CJS only — use createRequire so the ESM bundle can load it
+const _require = createRequire(import.meta.url);
+type PdfParseResult = { text: string; numpages: number };
+const pdfParse = _require("pdf-parse") as (buf: Buffer) => Promise<PdfParseResult>;
 
 const router = Router();
 
@@ -102,15 +108,30 @@ router.post("/extract-document", requireAuth, async (req, res) => {
   const contentParts: unknown[] = [];
 
   if (mimeType.startsWith("image/")) {
+    // Images → send as base64 vision input
     contentParts.push({
       type: "image_url",
       image_url: { url: `data:${mimeType};base64,${fileData}`, detail: "high" },
     });
   } else if (mimeType === "application/pdf") {
-    // GPT-4o supports PDFs via image_url with PDF mime type
+    // PDFs → extract text with pdf-parse, then send as text
+    // (OpenRouter/GPT-4o does not accept PDFs as image_url)
+    let pdfText: string;
+    try {
+      const buffer = Buffer.from(fileData, "base64");
+      const parsed = await pdfParse(buffer);
+      pdfText = parsed.text?.trim() ?? "";
+    } catch (e) {
+      res.status(422).json({ error: "pdf_parse_failed", message: String(e) });
+      return;
+    }
+    if (!pdfText) {
+      res.status(422).json({ error: "pdf_empty", message: "No text could be extracted from the PDF. Try uploading a scanned image instead." });
+      return;
+    }
     contentParts.push({
-      type: "image_url",
-      image_url: { url: `data:application/pdf;base64,${fileData}` },
+      type: "text",
+      text: `Here is the financial document (extracted from PDF):\n\n${pdfText}`,
     });
   } else {
     // CSV, plain text, docx — decode and send as text
