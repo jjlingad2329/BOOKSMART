@@ -216,16 +216,26 @@ export default function UserDashboard() {
     enabled: numericId !== null,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("organizations")
         .select("id")
         .eq("owner_id", numericId!)
         .limit(1)
         .maybeSingle();
+      if (error) {
+        console.warn("[dashboard] organizations query failed:", error.message, error.code);
+        throw error;
+      }
+      if (!data) console.warn("[dashboard] no organization found for numericId:", numericId);
       return (data as { id: number } | null) ?? null;
     },
   });
   const orgId = orgData?.id ?? null;
+
+  // Log null chain so we can diagnose empty dashboard in the browser console
+  useEffect(() => {
+    console.log("[dashboard] numericId:", numericId, "orgId:", orgId);
+  }, [numericId, orgId]);
 
   // Real-time: invalidate transaction queries when n8n writes new transactions.
   // Flutter filters by org_id, so we do the same.
@@ -261,7 +271,11 @@ export default function UserDashboard() {
         .eq("org_id", orgId!)
         .gte("date_time", startOfMonth())
         .order("date_time", { ascending: false });
-      if (error) throw error;
+      if (error) {
+        console.error("[dashboard] tx_month query failed:", error.message, error.code);
+        throw error;
+      }
+      console.log("[dashboard] tx_month rows:", data?.length ?? 0);
       return data ?? [];
     },
   });
@@ -277,7 +291,11 @@ export default function UserDashboard() {
         .eq("org_id", orgId!)
         .order("date_time", { ascending: false })
         .limit(5);
-      if (error) throw error;
+      if (error) {
+        console.error("[dashboard] tx_recent query failed:", error.message, error.code);
+        throw error;
+      }
+      console.log("[dashboard] tx_recent rows:", data?.length ?? 0);
       return data ?? [];
     },
   });
