@@ -133,8 +133,17 @@ async function callExtractDocument(
   const token = session?.access_token;
   if (!token) throw new Error("Not authenticated");
 
-  const bytes = await file.arrayBuffer();
-  const base64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  // Use FileReader to safely base64-encode any file size.
+  // btoa(String.fromCharCode(...bytes)) stack-overflows on large PDFs.
+  const base64 = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      resolve(dataUrl.split(",")[1]); // strip "data:...;base64," prefix
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
 
   const res = await fetch("/api/extract-document", {
     method: "POST",
