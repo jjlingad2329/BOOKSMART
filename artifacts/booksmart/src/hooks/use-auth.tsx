@@ -66,23 +66,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchProfile = async (authUuid: string) => {
     try {
       // 1. Try public.users (Flutter schema) — integer id + auth_id UUID
+      //    Columns: id, auth_id, email, role, first_name, middle_name,
+      //             last_name, phone_number, img_url, token_balance
       const { data: appUser, error: appUserError } = await supabase
         .from("users")
-        .select("id, email, full_name, role, token_balance, phone")
+        .select("id, auth_id, email, role, first_name, middle_name, last_name, phone_number, token_balance, img_url")
         .eq("auth_id", authUuid)
         .single();
 
       if (!appUserError && appUser) {
+        const parts = [appUser.first_name, appUser.middle_name, appUser.last_name]
+          .filter(Boolean)
+          .join(" ");
         setProfile({
           id: authUuid,
           numericId: appUser.id as number,
           email: appUser.email ?? "",
-          full_name: appUser.full_name ?? "",
+          full_name: (parts || appUser.email) ?? "",
           role: (appUser.role as UserProfile["role"]) ?? "user",
           token_balance: appUser.token_balance ?? 0,
-          phone: appUser.phone,
+          phone: appUser.phone_number,
         });
         return;
+      }
+
+      // Log the error so we can debug RLS / column issues without silently swallowing
+      if (appUserError) {
+        console.warn("fetchProfile: users table lookup failed:", appUserError.message, appUserError.code);
       }
 
       // 2. Try profiles table (alternative schema)

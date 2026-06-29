@@ -1,2 +1,3 @@
 - [Wouter routing](wouter-routing.md) — Switch+Route with function children unreliable in v3; use direct location map instead.
 - [Supabase Storage uploads](supabase-storage-upload.md) — upload flow: storage.upload → getPublicUrl → insert user_documents row.
+- [users table schema](users-table-schema.md) — columns are first_name/last_name/phone_number NOT full_name/phone; integer id is FK for all other tables
