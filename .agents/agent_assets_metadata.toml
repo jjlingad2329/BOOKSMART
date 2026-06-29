@@ -12,3 +12,9 @@ id = "ioDiC_3GatRQYp6N-W_pt"
 uri = "file://PROGRESS.md"
 type = "text"
 title = "BookSmart — Development Progress Log"
+
+[[outputs]]
+id = "VwUq5UCbcfzBQXCuwf_aO"
+uri = "file://DAILY_REPORT.md"
+type = "text"
+title = "BookSmart — Daily Report (June 29, 2026)"
