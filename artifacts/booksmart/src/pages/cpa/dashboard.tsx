@@ -12,10 +12,12 @@ interface Order {
   user_id: number;
   cpa_id: number;
   title: string;
-  services: string[];
+  services: string[] | null;
   status: string;
   payment_status: string;
   amount: number;
+  cpa_payout_amount: number | null;
+  cpa_payout_status: string | null;
   created_at: string;
 }
 
@@ -62,6 +64,7 @@ export default function CpaDashboard() {
       if (error) throw error;
       return data ?? [];
     },
+    staleTime: 30_000,
   });
 
   // ── Chats (recent activity) ───────────────────────────────────────────────
@@ -105,12 +108,12 @@ export default function CpaDashboard() {
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const pendingLeads = orders.filter((o) => o.status === "pending").length;
   const activeOrders = orders.filter((o) => o.status === "active").length;
-  const activeClients = new Set(
-    orders.filter((o) => ["active", "completed"].includes(o.status)).map((o) => o.user_id)
-  ).size;
+  // All unique clients who have ever placed an order with this CPA
+  const activeClients = new Set(orders.map((o) => o.user_id)).size;
+  // Use cpa_payout_amount (after platform fee) when available, fallback to amount
   const monthlyEarnings = orders
     .filter((o) => o.status === "completed" && o.created_at >= monthStart)
-    .reduce((s, o) => s + (o.amount ?? 0), 0);
+    .reduce((s, o) => s + (o.cpa_payout_amount ?? o.amount ?? 0), 0);
 
   const recentOrders = orders.slice(0, 5);
 
@@ -139,7 +142,9 @@ export default function CpaDashboard() {
             {ordersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
               <>
                 <div className="text-2xl font-bold">{activeClients}</div>
-                <p className="text-xs text-muted-foreground">from completed/active orders</p>
+                <p className="text-xs text-muted-foreground">
+                  {activeClients === 1 ? "client" : "clients"} with orders
+                </p>
               </>
             )}
           </CardContent>
@@ -169,7 +174,7 @@ export default function CpaDashboard() {
             {ordersLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
               <>
                 <div className="text-2xl font-bold">{fmtCurrency(monthlyEarnings)}</div>
-                <p className="text-xs text-muted-foreground">from completed orders this month</p>
+                <p className="text-xs text-muted-foreground">your payout from completed orders</p>
               </>
             )}
           </CardContent>

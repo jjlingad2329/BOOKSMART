@@ -17,11 +17,18 @@ interface Order {
   status: string;
   payment_status: string;
   amount: number;
+  cpa_payout_amount: number | null;
+  cpa_payout_status: string | null;
   created_at: string;
 }
 
 function fmtCurrency(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+}
+
+// The amount the CPA actually receives (after platform fee), fallback to full amount
+function cpaPayout(o: Order) {
+  return o.cpa_payout_amount ?? o.amount ?? 0;
 }
 
 function monthKey(ts: string) {
@@ -49,7 +56,7 @@ export default function CpaEarnings() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id,user_id,title,status,payment_status,amount,created_at")
+        .select("id,user_id,title,status,payment_status,amount,cpa_payout_amount,cpa_payout_status,created_at")
         .eq("cpa_id", numericId!)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -59,16 +66,24 @@ export default function CpaEarnings() {
 
   // ── KPI computations ───────────────────────────────────────────────────────
   const completed = orders.filter((o) => o.status === "completed");
-  const lifetimeEarnings = completed.reduce((s, o) => s + (o.amount ?? 0), 0);
+  const lifetimeEarnings = completed.reduce((s, o) => s + cpaPayout(o), 0);
+
   const thisMonthEarnings = completed
     .filter((o) => o.created_at >= monthStart)
-    .reduce((s, o) => s + (o.amount ?? 0), 0);
+    .reduce((s, o) => s + cpaPayout(o), 0);
+
   const lastMonthEarnings = completed
     .filter((o) => o.created_at >= lastMonthStart && o.created_at < monthStart)
-    .reduce((s, o) => s + (o.amount ?? 0), 0);
-  const pendingPayout = orders
-    .filter((o) => o.status === "completed" && o.payment_status === "unpaid")
-    .reduce((s, o) => s + (o.amount ?? 0), 0);
+    .reduce((s, o) => s + cpaPayout(o), 0);
+
+  // Pending payout: completed orders where CPA hasn't been paid out yet
+  const pendingPayout = completed
+    .filter((o) => o.cpa_payout_status === "pending" || (!o.cpa_payout_status && o.payment_status !== "paid"))
+    .reduce((s, o) => s + cpaPayout(o), 0);
+
+  const pendingPayoutCount = completed.filter(
+    (o) => o.cpa_payout_status === "pending" || (!o.cpa_payout_status && o.payment_status !== "paid")
+  ).length;
 
   const monthPct = lastMonthEarnings > 0
     ? Math.round(((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings) * 100)
@@ -79,7 +94,7 @@ export default function CpaEarnings() {
   for (const o of completed) {
     const key = monthKey(o.created_at);
     if (!monthlyMap[key]) monthlyMap[key] = { earned: 0, count: 0 };
-    monthlyMap[key].earned += o.amount ?? 0;
+    monthlyMap[key].earned += cpaPayout(o);
     monthlyMap[key].count += 1;
   }
   const monthlyRows = Object.entries(monthlyMap)
@@ -108,7 +123,7 @@ export default function CpaEarnings() {
               <>
                 <div className="text-3xl font-bold">{fmtCurrency(pendingPayout)}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {orders.filter((o) => o.status === "completed" && o.payment_status === "unpaid").length} unpaid completed orders
+                  {pendingPayoutCount} completed {pendingPayoutCount === 1 ? "order" : "orders"} awaiting payout
                 </p>
               </>
             )}
@@ -157,7 +172,7 @@ export default function CpaEarnings() {
         <Card className="border-border/50">
           <CardHeader>
             <CardTitle>Monthly Breakdown</CardTitle>
-            <CardDescription>Earnings per month from completed orders.</CardDescription>
+            <CardDescription>Your payout earnings per month.</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -173,7 +188,7 @@ export default function CpaEarnings() {
                     <TableRow>
                       <TableHead>Month</TableHead>
                       <TableHead className="text-center">Orders</TableHead>
-                      <TableHead className="text-right">Earned</TableHead>
+                      <TableHead className="text-right">Payout</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -210,34 +225,37 @@ export default function CpaEarnings() {
                   <TableHeader className="bg-secondary/20">
                     <TableRow>
                       <TableHead>Order</TableHead>
-                      <TableHead>Payment</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Payout Status</TableHead>
+                      <TableHead className="text-right">Your Payout</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recentCompleted.map((o) => (
-                      <TableRow key={o.id}>
-                        <TableCell>
-                          <div className="font-medium text-sm truncate max-w-[140px]">{o.title}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(o.created_at).toLocaleDateString()}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={
-                              o.payment_status === "paid"
-                                ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-xs"
-                                : "text-yellow-500 border-yellow-500/30 bg-yellow-500/10 text-xs"
-                            }
-                          >
-                            {o.payment_status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">{fmtCurrency(o.amount ?? 0)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {recentCompleted.map((o) => {
+                      const isPaid = o.cpa_payout_status === "paid" || o.payment_status === "paid";
+                      return (
+                        <TableRow key={o.id}>
+                          <TableCell>
+                            <div className="font-medium text-sm truncate max-w-[140px]">{o.title}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(o.created_at).toLocaleDateString()}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={
+                                isPaid
+                                  ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/10 text-xs"
+                                  : "text-yellow-500 border-yellow-500/30 bg-yellow-500/10 text-xs"
+                              }
+                            >
+                              {isPaid ? "paid" : "pending"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">{fmtCurrency(cpaPayout(o))}</TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
