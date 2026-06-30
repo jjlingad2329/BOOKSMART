@@ -181,7 +181,7 @@ function CircularGauge({ pct, size = 90 }: { pct: number; size?: number }) {
 type DocStatus = "Uploaded" | "Verified" | "Processed";
 type DocEntry = {
   id: string; title: string; type: string; category: string;
-  date: string; status: DocStatus; size: string;
+  date: string; status: DocStatus; size: string; fileUrl?: string;
 };
 
 const DOC_CATEGORIES = ["All", "Tax Forms", "Income", "Expenses", "Employment", "Receipts"];
@@ -496,6 +496,7 @@ export default function Reports() {
     setUploadSaving(true);
     setTimeout(() => {
       const ext = uploadPickedFile.name.split(".").pop()?.toUpperCase() ?? "FILE";
+      const fileUrl = URL.createObjectURL(uploadPickedFile);
       const newDoc: DocEntry = {
         id: Date.now().toString(),
         title: uploadName.trim(),
@@ -506,6 +507,7 @@ export default function Reports() {
         size: uploadPickedFile.size > 1_000_000
           ? `${(uploadPickedFile.size / 1_000_000).toFixed(1)} MB`
           : `${Math.round(uploadPickedFile.size / 1000)} KB`,
+        fileUrl,
       };
       setDocs(prev => [newDoc, ...prev]);
       setUploadSaving(false);
@@ -1271,10 +1273,22 @@ export default function Reports() {
                     <span>{doc.size}</span>
                   </div>
                   <div className="flex gap-2 pt-1 border-t border-border/30">
-                    <button className="flex items-center gap-1 text-xs text-primary hover:underline">
+                    <button
+                      onClick={() => doc.fileUrl && window.open(doc.fileUrl, "_blank")}
+                      disabled={!doc.fileUrl}
+                      className={`flex items-center gap-1 text-xs hover:underline ${doc.fileUrl ? "text-primary cursor-pointer" : "text-muted-foreground/40 cursor-not-allowed"}`}>
                       <Search className="h-3 w-3" /> View
                     </button>
-                    <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline">
+                    <button
+                      onClick={() => {
+                        if (!doc.fileUrl) return;
+                        const a = document.createElement("a");
+                        a.href = doc.fileUrl;
+                        a.download = `${doc.title}.${doc.type.toLowerCase()}`;
+                        a.click();
+                      }}
+                      disabled={!doc.fileUrl}
+                      className={`flex items-center gap-1 text-xs hover:underline ${doc.fileUrl ? "text-muted-foreground hover:text-foreground cursor-pointer" : "text-muted-foreground/40 cursor-not-allowed"}`}>
                       <Download className="h-3 w-3" /> Download
                     </button>
                   </div>
