@@ -367,7 +367,7 @@ export default function CpaNetwork() {
                     size="icon"
                     className="shrink-0"
                     title="Message this CPA"
-                    onClick={() => setLocation("/user/chat")}
+                    onClick={() => setLocation(`/user/chat?cpa_id=${cpa.id}`)}
                   >
                     <MessageSquare className="h-4 w-4" />
                   </Button>
