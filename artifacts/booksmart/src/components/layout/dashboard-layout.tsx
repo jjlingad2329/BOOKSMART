@@ -72,7 +72,7 @@ export function DashboardLayout({ children, role }: DashboardLayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background text-foreground">
+      <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
         <Sidebar className="border-r border-border bg-card">
           <SidebarContent className="flex flex-col h-full">
             <div className="p-6">
