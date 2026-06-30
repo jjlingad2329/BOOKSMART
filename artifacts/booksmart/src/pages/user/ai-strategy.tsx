@@ -414,25 +414,32 @@ Rules:
                       <p className="text-sm text-muted-foreground">No deductible transactions in this period.</p>
                     </div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <PieChart>
-                        <Pie data={groups} dataKey="totalAmount" nameKey="label"
-                          cx="50%" cy="50%" outerRadius={90} innerRadius={50}
-                          paddingAngle={2}>
-                          {groups.map((g, i) => (
-                            <Cell key={g.label} fill={g.color} opacity={0.9} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value: number) => [fmt(value), "Amount"]}
-                          contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
-                        />
-                        <Legend
-                          formatter={(value) => <span className="text-xs text-muted-foreground">{value}</span>}
-                          iconSize={10}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Pie data={groups} dataKey="totalAmount" nameKey="label"
+                            cx="50%" cy="50%" outerRadius={90} innerRadius={52}
+                            paddingAngle={2}>
+                            {groups.map((g) => (
+                              <Cell key={g.label} fill={g.color} opacity={0.9} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(value: number) => [fmt(value), "Amount"]}
+                            contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      {/* Custom legend */}
+                      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2 justify-center">
+                        {groups.map(g => (
+                          <div key={g.label} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: g.color }} />
+                            <span className="max-w-[120px] truncate">{g.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
