@@ -1232,7 +1232,20 @@ export default function Reports() {
               </div>
             </DialogHeader>
             <div className="bg-background/60 flex items-center justify-center" style={{ minHeight: 420 }}>
-              {["PDF"].includes(viewingDoc.type) ? (
+              {!viewingDoc.fileUrl ? (
+                <div className="flex flex-col items-center gap-4 py-16 text-center px-8">
+                  <div className="h-16 w-16 rounded-2xl bg-muted/40 flex items-center justify-center">
+                    <FileText className="h-8 w-8 text-muted-foreground/50" />
+                  </div>
+                  <div>
+                    <p className="font-semibold">{viewingDoc.title}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{viewingDoc.type} · {viewingDoc.size}</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground max-w-xs">
+                    This is a sample document. Upload your own documents using the <span className="text-primary font-medium">Upload Document</span> button to view and download them here.
+                  </p>
+                </div>
+              ) : ["PDF"].includes(viewingDoc.type) ? (
                 <iframe src={viewingDoc.fileUrl} className="w-full" style={{ height: 500, border: "none" }} title={viewingDoc.title} />
               ) : ["JPG", "JPEG", "PNG", "GIF", "WEBP", "SVG"].includes(viewingDoc.type) ? (
                 <img src={viewingDoc.fileUrl} alt={viewingDoc.title} className="max-w-full max-h-[500px] object-contain p-4" />
@@ -1334,21 +1347,19 @@ export default function Reports() {
                   </div>
                   <div className="flex gap-2 pt-1 border-t border-border/30">
                     <button
-                      onClick={() => doc.fileUrl && setViewingDoc(doc)}
-                      disabled={!doc.fileUrl}
-                      className={`flex items-center gap-1 text-xs hover:underline ${doc.fileUrl ? "text-primary cursor-pointer" : "text-muted-foreground/40 cursor-not-allowed"}`}>
+                      onClick={() => setViewingDoc(doc)}
+                      className="flex items-center gap-1 text-xs text-primary hover:underline cursor-pointer">
                       <Search className="h-3 w-3" /> View
                     </button>
                     <button
                       onClick={() => {
-                        if (!doc.fileUrl) return;
+                        if (!doc.fileUrl) { setViewingDoc(doc); return; }
                         const a = document.createElement("a");
                         a.href = doc.fileUrl;
                         a.download = `${doc.title}.${doc.type.toLowerCase()}`;
                         a.click();
                       }}
-                      disabled={!doc.fileUrl}
-                      className={`flex items-center gap-1 text-xs hover:underline ${doc.fileUrl ? "text-muted-foreground hover:text-foreground cursor-pointer" : "text-muted-foreground/40 cursor-not-allowed"}`}>
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline cursor-pointer">
                       <Download className="h-3 w-3" /> Download
                     </button>
                   </div>
