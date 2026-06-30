@@ -187,7 +187,12 @@ export default function LoginScreen() {
               />
             </View>
 
-            <Text style={styles.label}>Password</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <Text style={styles.label}>Password</Text>
+              <Pressable onPress={() => router.push("/(auth)/forgot-password")}>
+                <Text style={[styles.signupLink, { fontSize: 13 }]}>Forgot password?</Text>
+              </Pressable>
+            </View>
             <View style={styles.inputRow}>
               <TextInput
                 style={styles.input}

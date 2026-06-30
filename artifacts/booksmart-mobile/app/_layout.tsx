@@ -21,23 +21,39 @@ SplashScreen.preventAutoHideAsync();
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  const { session, isLoading } = useAuth();
+  const { session, isLoading, profile } = useAuth();
   const segments = useSegments();
 
   if (isLoading) return null;
 
   const inAuth = segments[0] === "(auth)";
+  const inTabs = segments[0] === "(tabs)";
+  const inCpaTabs = segments[0] === "(cpa-tabs)";
 
   if (!session && !inAuth) {
     return <Redirect href="/(auth)/login" />;
   }
+
   if (session && inAuth) {
+    const role = profile?.role ?? "user";
+    if (role === "cpa") return <Redirect href="/(cpa-tabs)/" />;
     return <Redirect href="/(tabs)/" />;
+  }
+
+  if (session && profile && !inAuth) {
+    const role = profile.role;
+    if (role === "cpa" && !inCpaTabs && !inTabs) {
+      return <Redirect href="/(cpa-tabs)/" />;
+    }
+    if ((role === "user" || role === "admin") && !inTabs && !inCpaTabs) {
+      return <Redirect href="/(tabs)/" />;
+    }
   }
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="(cpa-tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
     </Stack>
   );

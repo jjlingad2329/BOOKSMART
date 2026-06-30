@@ -15,6 +15,7 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabase";
 import { useColors } from "@/hooks/useColors";
 
 type Message = {
@@ -67,9 +68,14 @@ export default function AiChatScreen() {
     try {
       const domain = process.env.EXPO_PUBLIC_DOMAIN;
       const baseUrl = domain ? `https://${domain}` : "";
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const authHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (currentSession?.access_token) {
+        authHeaders["Authorization"] = `Bearer ${currentSession.access_token}`;
+      }
       const response = await fetch(`${baseUrl}/api/openai-chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({ messages: apiMessages }),
       });
 
