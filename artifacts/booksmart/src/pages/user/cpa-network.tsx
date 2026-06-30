@@ -103,15 +103,14 @@ function HireDialog({
       const payload = {
         user_id: userNumericId,
         cpa_id: cpa.id,
-        cpa_name: fullName(cpa),
-        service,
-        notes,
+        title: service,           // order title = service name
+        services: service,        // services column
+        description: notes,       // notes go into description
         status: "pending",
-        created_at: new Date().toISOString(),
+        payment_status: "unpaid",
       };
       const { error } = await supabase.from("orders").insert(payload);
       if (error) {
-        // Table might not exist yet — surface a friendly message
         if (error.code === "42P01") {
           throw new Error("Orders are not yet enabled on this account. Please contact support.");
         }

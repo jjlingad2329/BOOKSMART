@@ -20,12 +20,14 @@ type Order = {
   id: number;
   user_id: number | null;
   cpa_id: number | null;
-  cpa_name: string | null;
-  service: string | null;
-  notes: string | null;
+  title: string | null;
+  services: string | null;
+  description: string | null;
   status: "pending" | "active" | "completed" | "cancelled" | string;
+  payment_status: string | null;
   created_at: string;
   amount: number | null;
+  cpa: { first_name: string | null; last_name: string | null } | null;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -66,16 +68,23 @@ function OrderDetail({ order, onClose }: { order: Order; onClose: () => void }) 
               {order.status}
             </Badge>
           </Row>
-          <Row label="CPA">{order.cpa_name ?? "—"}</Row>
-          <Row label="Service">{order.service ?? "—"}</Row>
+          {order.payment_status && (
+            <Row label="Payment">
+              <span className="capitalize">{order.payment_status}</span>
+            </Row>
+          )}
+          <Row label="CPA">
+            {[order.cpa?.first_name, order.cpa?.last_name].filter(Boolean).join(" ") || "—"}
+          </Row>
+          <Row label="Service">{order.title ?? order.services ?? "—"}</Row>
           <Row label="Date submitted">{fmtDate(order.created_at)}</Row>
           {order.amount != null && (
             <Row label="Amount">${order.amount.toFixed(2)}</Row>
           )}
-          {order.notes && (
+          {order.description && (
             <div className="pt-2 border-t border-border/30">
               <p className="text-xs text-muted-foreground mb-1 font-medium uppercase tracking-wide">Notes</p>
-              <p className="text-muted-foreground">{order.notes}</p>
+              <p className="text-muted-foreground">{order.description}</p>
             </div>
           )}
         </div>
@@ -114,11 +123,10 @@ export default function Orders() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("orders")
-        .select("id, user_id, cpa_id, cpa_name, service, notes, status, created_at, amount")
+        .select("id, user_id, cpa_id, title, services, description, status, payment_status, amount, created_at, cpa:users!cpa_id(first_name, last_name)")
         .eq("user_id", numericId!)
         .order("created_at", { ascending: false });
       if (error) {
-        // orders table doesn't exist yet — return empty gracefully
         if (error.code === "42P01") return [];
         throw error;
       }
@@ -127,14 +135,20 @@ export default function Orders() {
   });
 
   // ── Filter ──────────────────────────────────────────────────────────────────
+  const cpaFullName = (o: Order) => {
+    const parts = [o.cpa?.first_name, o.cpa?.last_name].filter(Boolean).join(" ");
+    return parts || "—";
+  };
+
   const filtered = orders.filter(o => {
     if (statusFilter !== "all" && o.status !== statusFilter) return false;
     const q = search.toLowerCase();
     if (!q) return true;
     return (
       orderId(o.id).toLowerCase().includes(q) ||
-      (o.cpa_name ?? "").toLowerCase().includes(q) ||
-      (o.service ?? "").toLowerCase().includes(q)
+      cpaFullName(o).toLowerCase().includes(q) ||
+      (o.title ?? "").toLowerCase().includes(q) ||
+      (o.services ?? "").toLowerCase().includes(q)
     );
   });
 
@@ -253,8 +267,8 @@ export default function Orders() {
                   {filtered.map(order => (
                     <TableRow key={order.id} className="hover:bg-secondary/10">
                       <TableCell className="font-medium text-primary">{orderId(order.id)}</TableCell>
-                      <TableCell>{order.cpa_name ?? <span className="text-muted-foreground">—</span>}</TableCell>
-                      <TableCell>{order.service ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                      <TableCell>{cpaFullName(order)}</TableCell>
+                      <TableCell>{order.title ?? order.services ?? <span className="text-muted-foreground">—</span>}</TableCell>
                       <TableCell className="text-muted-foreground">{fmtDate(order.created_at)}</TableCell>
                       <TableCell>
                         {order.amount != null
