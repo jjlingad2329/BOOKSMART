@@ -250,6 +250,9 @@ export default function Reports() {
   const [uploadError, setUploadError] = useState("");
   const uploadFileRef = useRef<HTMLInputElement>(null);
 
+  // Document viewer state
+  const [viewingDoc, setViewingDoc] = useState<DocEntry | null>(null);
+
   const PERIOD_LABELS: { key: Period; label: string }[] = [
     { key: "7d", label: "7 Days" },
     { key: "30d", label: "30 Days" },
@@ -1205,6 +1208,63 @@ export default function Reports() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Document Preview Dialog ── */}
+      {viewingDoc && (
+        <Dialog open={!!viewingDoc} onOpenChange={v => { if (!v) setViewingDoc(null); }}>
+          <DialogContent className="sm:max-w-2xl bg-card border-border/60 p-0 overflow-hidden">
+            <DialogHeader className="px-5 pt-5 pb-3 border-b border-border/40">
+              <div className="flex items-center justify-between gap-3">
+                <DialogTitle className="flex items-center gap-2 text-sm font-semibold truncate">
+                  <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                  <span className="truncate">{viewingDoc.title}</span>
+                  <span className="text-xs font-normal text-muted-foreground flex-shrink-0">{viewingDoc.type}</span>
+                </DialogTitle>
+                <button
+                  onClick={() => {
+                    const a = document.createElement("a");
+                    a.href = viewingDoc.fileUrl!;
+                    a.download = `${viewingDoc.title}.${viewingDoc.type.toLowerCase()}`;
+                    a.click();
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:underline flex-shrink-0">
+                  <Download className="h-3.5 w-3.5" /> Download
+                </button>
+              </div>
+            </DialogHeader>
+            <div className="bg-background/60 flex items-center justify-center" style={{ minHeight: 420 }}>
+              {["PDF"].includes(viewingDoc.type) ? (
+                <iframe src={viewingDoc.fileUrl} className="w-full" style={{ height: 500, border: "none" }} title={viewingDoc.title} />
+              ) : ["JPG", "JPEG", "PNG", "GIF", "WEBP", "SVG"].includes(viewingDoc.type) ? (
+                <img src={viewingDoc.fileUrl} alt={viewingDoc.title} className="max-w-full max-h-[500px] object-contain p-4" />
+              ) : (
+                <div className="flex flex-col items-center gap-4 py-16 text-center px-8">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                    <FileText className="h-8 w-8 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-semibold">{viewingDoc.title}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{viewingDoc.type} · {viewingDoc.size}</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground max-w-xs">
+                    This file type can't be previewed directly. Download it to open it in the appropriate application.
+                  </p>
+                  <button
+                    onClick={() => {
+                      const a = document.createElement("a");
+                      a.href = viewingDoc.fileUrl!;
+                      a.download = `${viewingDoc.title}.${viewingDoc.type.toLowerCase()}`;
+                      a.click();
+                    }}
+                    className="flex items-center gap-1.5 text-sm font-medium text-primary border border-primary/40 rounded-lg px-4 py-2 hover:bg-primary/10 transition-colors">
+                    <Download className="h-4 w-4" /> Download File
+                  </button>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* ── Document Repository Sheet ── */}
       <Sheet open={showDocs} onOpenChange={setShowDocs}>
         <SheetContent side="right" className="w-full sm:max-w-lg bg-card border-border/60 flex flex-col p-0">
@@ -1274,7 +1334,7 @@ export default function Reports() {
                   </div>
                   <div className="flex gap-2 pt-1 border-t border-border/30">
                     <button
-                      onClick={() => doc.fileUrl && window.open(doc.fileUrl, "_blank")}
+                      onClick={() => doc.fileUrl && setViewingDoc(doc)}
                       disabled={!doc.fileUrl}
                       className={`flex items-center gap-1 text-xs hover:underline ${doc.fileUrl ? "text-primary cursor-pointer" : "text-muted-foreground/40 cursor-not-allowed"}`}>
                       <Search className="h-3 w-3" /> View
