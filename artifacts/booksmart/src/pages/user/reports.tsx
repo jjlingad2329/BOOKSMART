@@ -236,8 +236,19 @@ export default function Reports() {
   const [docSearch, setDocSearch] = useState("");
   const [docCategory, setDocCategory] = useState("All");
   const [docs, setDocs] = useState<DocEntry[]>(SEED_DOCS);
-  const [uploadingDoc, setUploadingDoc] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Upload dialog state
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadPickedFile, setUploadPickedFile] = useState<File | null>(null);
+  const [uploadName, setUploadName] = useState("");
+  const [uploadCategory, setUploadCategory] = useState("");
+  const [uploadYear, setUploadYear] = useState(() => new Date().getFullYear().toString());
+  const [uploadPeriodStart, setUploadPeriodStart] = useState(() => `${new Date().getFullYear()}-01-01`);
+  const [uploadPeriodEnd, setUploadPeriodEnd] = useState(() => `${new Date().getFullYear()}-12-31`);
+  const [uploadAsOf, setUploadAsOf] = useState(() => new Date().toISOString().slice(0, 10));
+  const [uploadSaving, setUploadSaving] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const uploadFileRef = useRef<HTMLInputElement>(null);
 
   const PERIOD_LABELS: { key: Period; label: string }[] = [
     { key: "7d", label: "7 Days" },
@@ -430,26 +441,77 @@ export default function Reports() {
     }
   }
 
-  // ── Document upload handler ─────────────────────────────────────────────────
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // ── Upload dialog helpers ───────────────────────────────────────────────────
+  const isBalanceSheetUpload = uploadCategory === "Balance Sheet";
+
+  function resetUploadForm() {
+    setUploadPickedFile(null);
+    setUploadName("");
+    setUploadCategory("");
+    const y = new Date().getFullYear();
+    setUploadYear(y.toString());
+    setUploadPeriodStart(`${y}-01-01`);
+    setUploadPeriodEnd(`${y}-12-31`);
+    setUploadAsOf(new Date().toISOString().slice(0, 10));
+    setUploadError("");
+    if (uploadFileRef.current) uploadFileRef.current.value = "";
+  }
+
+  function handleFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploadingDoc(true);
+    setUploadPickedFile(file);
+    if (!uploadName) setUploadName(file.name.replace(/\.[^.]+$/, ""));
+    setUploadError("");
+  }
+
+  function handleUploadYearChange(year: string) {
+    setUploadYear(year);
+    const y = parseInt(year, 10);
+    if (!isNaN(y)) {
+      setUploadPeriodStart(`${y}-01-01`);
+      setUploadPeriodEnd(`${y}-12-31`);
+    }
+  }
+
+  function handleUploadSave() {
+    if (!uploadPickedFile) { setUploadError("Please select a file first."); return; }
+    if (!uploadName.trim()) { setUploadError("Please enter a document name."); return; }
+    if (!uploadCategory) { setUploadError("Please select a document category."); return; }
+    if (isBalanceSheetUpload) {
+      if (!uploadAsOf) { setUploadError("Please select an As Of date."); return; }
+    } else {
+      if (!uploadPeriodStart || !uploadPeriodEnd) { setUploadError("Please select period dates."); return; }
+      if (uploadPeriodEnd < uploadPeriodStart) { setUploadError("End date must be on or after start date."); return; }
+    }
+
+    const CAT_MAP: Record<string, string> = {
+      "Balance Sheet": "Tax Forms",
+      "Profit & Loss": "Income",
+      "Income Statement": "Income",
+      "Cash Flow Statement": "Tax Forms",
+      "Transactions": "Expenses",
+    };
+
+    setUploadSaving(true);
     setTimeout(() => {
-      const ext = file.name.split(".").pop()?.toUpperCase() ?? "FILE";
+      const ext = uploadPickedFile.name.split(".").pop()?.toUpperCase() ?? "FILE";
       const newDoc: DocEntry = {
         id: Date.now().toString(),
-        title: file.name.replace(/\.[^.]+$/, ""),
+        title: uploadName.trim(),
         type: ext,
-        category: "Tax Forms",
+        category: CAT_MAP[uploadCategory] ?? "Tax Forms",
         date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
         status: "Uploaded",
-        size: file.size > 1_000_000 ? `${(file.size / 1_000_000).toFixed(1)} MB` : `${Math.round(file.size / 1000)} KB`,
+        size: uploadPickedFile.size > 1_000_000
+          ? `${(uploadPickedFile.size / 1_000_000).toFixed(1)} MB`
+          : `${Math.round(uploadPickedFile.size / 1000)} KB`,
       };
       setDocs(prev => [newDoc, ...prev]);
-      setUploadingDoc(false);
-    }, 1200);
-    e.target.value = "";
+      setUploadSaving(false);
+      setShowUpload(false);
+      resetUploadForm();
+    }, 900);
   }
 
   const filteredDocs = docs.filter(d => {
@@ -1032,6 +1094,115 @@ export default function Reports() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Upload Financial Document Dialog ── */}
+      <Dialog open={showUpload} onOpenChange={v => { if (!v) resetUploadForm(); setShowUpload(v); }}>
+        <DialogContent className="sm:max-w-md bg-card border-border/60">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Upload className="h-4.5 w-4.5 text-primary" />
+              Upload Financial Document
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            {/* File pick area */}
+            <input ref={uploadFileRef} type="file" className="hidden"
+              accept=".pdf,.csv,.xlsx,.xls,.doc,.docx,.jpg,.jpeg,.png"
+              onChange={handleFilePicked} />
+            <button
+              onClick={() => uploadFileRef.current?.click()}
+              className="w-full border-2 border-dashed border-border/60 hover:border-primary/50 rounded-xl p-6 flex flex-col items-center gap-2 transition-colors group"
+            >
+              <div className="h-12 w-12 rounded-xl bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center transition-colors">
+                <Upload className="h-6 w-6 text-primary" />
+              </div>
+              <span className="text-sm font-medium">Upload From Device</span>
+              <span className="text-xs text-muted-foreground">PDF, CSV, Excel, Word, or Image</span>
+            </button>
+
+            {/* Picked file badge */}
+            {uploadPickedFile && (
+              <div className="flex items-center gap-2 rounded-lg bg-primary/10 border border-primary/20 px-3 py-2">
+                <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                <span className="text-xs text-primary flex-1 truncate">{uploadPickedFile.name}</span>
+                <button onClick={() => { setUploadPickedFile(null); if (uploadFileRef.current) uploadFileRef.current.value = ""; }}
+                  className="text-muted-foreground hover:text-foreground ml-1 flex-shrink-0">
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Document Name */}
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Document Name *</label>
+              <Input value={uploadName} onChange={e => setUploadName(e.target.value)} placeholder="e.g. W-9 Form - John Doe"
+                className="mt-1.5 bg-background border-border/60 h-9 text-sm" />
+            </div>
+
+            {/* Category + Year row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Category *</label>
+                <select value={uploadCategory} onChange={e => setUploadCategory(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/60">
+                  <option value="">Select category</option>
+                  {["Balance Sheet", "Profit & Loss", "Income Statement", "Cash Flow Statement", "Transactions"].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Year</label>
+                <select value={uploadYear} onChange={e => handleUploadYearChange(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/60">
+                  {Array.from({ length: 15 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Period dates */}
+            {uploadCategory && (
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {isBalanceSheetUpload ? "As Of Date *" : "Document Period *"}
+                </label>
+                {isBalanceSheetUpload ? (
+                  <input type="date" value={uploadAsOf} onChange={e => setUploadAsOf(e.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/60" />
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 mt-1.5">
+                    <input type="date" value={uploadPeriodStart} onChange={e => setUploadPeriodStart(e.target.value)}
+                      placeholder="Start date"
+                      className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/60" />
+                    <input type="date" value={uploadPeriodEnd} onChange={e => setUploadPeriodEnd(e.target.value)}
+                      placeholder="End date"
+                      className="rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/60" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Validation error */}
+            {uploadError && (
+              <p className="text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">{uploadError}</p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => { resetUploadForm(); setShowUpload(false); }}
+              className="border-border/60">
+              Close
+            </Button>
+            <Button size="sm" onClick={handleUploadSave} disabled={uploadSaving}
+              className="bg-primary text-primary-foreground gap-1.5">
+              {uploadSaving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…</> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Document Repository Sheet ── */}
       <Sheet open={showDocs} onOpenChange={setShowDocs}>
         <SheetContent side="right" className="w-full sm:max-w-lg bg-card border-border/60 flex flex-col p-0">
@@ -1041,18 +1212,10 @@ export default function Reports() {
                 <FileText className="h-5 w-5 text-primary" />
                 Document Repository
               </SheetTitle>
-              <div>
-                <input ref={fileInputRef} type="file" className="hidden"
-                  accept=".pdf,.csv,.xlsx,.xls,.doc,.docx,.jpg,.jpeg,.png"
-                  onChange={handleFileUpload} />
-                <Button size="sm" onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingDoc}
-                  className="bg-primary text-primary-foreground gap-1.5 h-8 text-xs">
-                  {uploadingDoc
-                    ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
-                    : <><Upload className="h-3.5 w-3.5" /> Upload Document</>}
-                </Button>
-              </div>
+              <Button size="sm" onClick={() => setShowUpload(true)}
+                className="bg-primary text-primary-foreground gap-1.5 h-8 text-xs">
+                <Upload className="h-3.5 w-3.5" /> Upload Document
+              </Button>
             </div>
             {/* Search */}
             <div className="relative mt-3">
@@ -1079,7 +1242,7 @@ export default function Reports() {
                 <p className="text-sm text-muted-foreground">
                   {docSearch ? "No documents match your search." : "No documents yet. Upload your first document."}
                 </p>
-                <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}
+                <Button size="sm" variant="outline" onClick={() => setShowUpload(true)}
                   className="border-primary/40 text-primary gap-1.5">
                   <Upload className="h-3.5 w-3.5" /> Upload
                 </Button>
