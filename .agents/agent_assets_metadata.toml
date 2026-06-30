@@ -18,3 +18,9 @@ id = "VwUq5UCbcfzBQXCuwf_aO"
 uri = "file://DAILY_REPORT.md"
 type = "text"
 title = "BookSmart — Full Daily Report (June 29, 2026)"
+
+[[outputs]]
+id = "pkYEoN5lZXS2LXyI6udBp"
+uri = "file://eod-report-2026-06-30.md"
+type = "text"
+title = "EOD Report — June 30, 2026"
