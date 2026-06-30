@@ -67,6 +67,7 @@ export default function CpaOrders() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [newStatus, setNewStatus] = useState("");
+  const [newAmount, setNewAmount] = useState("");
   const [userMap, setUserMap] = useState<Record<number, UserRow>>({});
 
   // ── All orders for this CPA ────────────────────────────────────────────────
@@ -100,17 +101,22 @@ export default function CpaOrders() {
       });
   }, [orders]);
 
-  // ── Update order status ────────────────────────────────────────────────────
-  const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: number; status: string }) => {
-      const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+  // ── Update order (status + amount) ────────────────────────────────────────
+  const updateOrder = useMutation({
+    mutationFn: async ({ id, status, amount }: { id: number; status: string; amount: number }) => {
+      const { error } = await supabase
+        .from("orders")
+        .update({ status, amount })
+        .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      toast.success("Order status updated.");
+    onSuccess: (_, vars) => {
+      toast.success("Order updated.");
       qc.invalidateQueries({ queryKey: ["cpa_orders", numericId] });
       qc.invalidateQueries({ queryKey: ["cpa_leads", numericId] });
-      if (selectedOrder) setSelectedOrder({ ...selectedOrder, status: newStatus });
+      if (selectedOrder) {
+        setSelectedOrder({ ...selectedOrder, status: vars.status, amount: vars.amount });
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -211,6 +217,7 @@ export default function CpaOrders() {
                             onClick={() => {
                               setSelectedOrder(order);
                               setNewStatus(order.status);
+                              setNewAmount(String(order.amount ?? 0));
                             }}
                           >
                             <Eye className="h-4 w-4" />
@@ -244,8 +251,16 @@ export default function CpaOrders() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Amount</div>
-                  <div className="font-medium">{fmtCurrency(selectedOrder.amount ?? 0)}</div>
+                  <div className="text-xs text-muted-foreground mb-1">Fee Amount ($)</div>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="h-9"
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                    placeholder="0.00"
+                  />
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Payment</div>
@@ -295,15 +310,22 @@ export default function CpaOrders() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setSelectedOrder(null)}>Close</Button>
             <Button
-              disabled={!selectedOrder || newStatus === selectedOrder.status || updateStatus.isPending}
+              disabled={
+                !selectedOrder ||
+                updateOrder.isPending ||
+                (newStatus === selectedOrder.status && Number(newAmount) === (selectedOrder.amount ?? 0))
+              }
               onClick={() => {
-                if (selectedOrder && newStatus !== selectedOrder.status) {
-                  updateStatus.mutate({ id: selectedOrder.id, status: newStatus });
-                }
+                if (!selectedOrder) return;
+                updateOrder.mutate({
+                  id: selectedOrder.id,
+                  status: newStatus,
+                  amount: Math.max(0, Number(newAmount) || 0),
+                });
               }}
             >
-              {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Save Status
+              {updateOrder.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
