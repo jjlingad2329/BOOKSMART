@@ -1,9 +1,16 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle,
+} from "@/components/ui/sheet";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Legend,
@@ -11,6 +18,8 @@ import {
 import {
   TrendingUp, TrendingDown, ArrowRight, Loader2,
   DollarSign, BarChart2, Droplets, Sparkles,
+  Download, Upload, FileText, Search, FileSpreadsheet,
+  File, CheckCircle2, Clock,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -167,11 +176,68 @@ function CircularGauge({ pct, size = 90 }: { pct: number; size?: number }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+// ─── Document Repository types ─────────────────────────────────────────────
+
+type DocStatus = "Uploaded" | "Verified" | "Processed";
+type DocEntry = {
+  id: string; title: string; type: string; category: string;
+  date: string; status: DocStatus; size: string;
+};
+
+const DOC_CATEGORIES = ["All", "Tax Forms", "Income", "Expenses", "Employment", "Receipts"];
+const STATUS_COLOR: Record<DocStatus, string> = {
+  Uploaded: "text-emerald-400 border-emerald-400/50 bg-emerald-500/10",
+  Verified: "text-blue-400 border-blue-400/50 bg-blue-500/10",
+  Processed: "text-primary border-primary/50 bg-primary/10",
+};
+const STATUS_ICON: Record<DocStatus, typeof CheckCircle2> = {
+  Uploaded: CheckCircle2, Verified: CheckCircle2, Processed: Clock,
+};
+
+const SEED_DOCS: DocEntry[] = [
+  { id: "1", title: "W-9 Form - Self", type: "W-9", category: "Tax Forms", date: "Nov 15, 2024", status: "Uploaded", size: "2.4 MB" },
+  { id: "2", title: "1099-INT - Bank Statement", type: "1099", category: "Income", date: "Jan 30, 2024", status: "Verified", size: "1.8 MB" },
+  { id: "3", title: "Business Expense Receipts Q1", type: "Receipts", category: "Expenses", date: "Mar 20, 2024", status: "Uploaded", size: "5.2 MB" },
+  { id: "4", title: "W-2 - Primary Employer", type: "W-2", category: "Employment", date: "Feb 15, 2024", status: "Processed", size: "3.1 MB" },
+];
+
+type ExportFreq = "monthly" | "quarterly" | "yearly";
+type ExportReportType = "pl" | "bs" | "cf";
+
+// ─── CSV export helper ──────────────────────────────────────────────────────
+
+function exportCSV(rows: string[][], filename: string) {
+  const csv = rows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function Reports() {
   const { profile } = useAuth();
   const numericId = profile?.numericId ?? null;
   const [period, setPeriod] = useState<Period>("3m");
   const [tab, setTab] = useState<Tab>("dashboard");
+
+  // Export dialog state
+  const [showExport, setShowExport] = useState(false);
+  const [exportType, setExportType] = useState<ExportReportType>("pl");
+  const [exportFreq, setExportFreq] = useState<ExportFreq>("monthly");
+  const [exportStart, setExportStart] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().slice(0, 10);
+  });
+  const [exportEnd, setExportEnd] = useState(() => new Date().toISOString().slice(0, 10));
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Document Repository state
+  const [showDocs, setShowDocs] = useState(false);
+  const [docSearch, setDocSearch] = useState("");
+  const [docCategory, setDocCategory] = useState("All");
+  const [docs, setDocs] = useState<DocEntry[]>(SEED_DOCS);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const PERIOD_LABELS: { key: Period; label: string }[] = [
     { key: "7d", label: "7 Days" },
@@ -286,6 +352,112 @@ export default function Reports() {
   // Period label
   const periodLabel = `${start.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 
+  // ── Export handler ──────────────────────────────────────────────────────────
+  async function handleExport() {
+    setIsExporting(true);
+    try {
+      const sDate = new Date(exportStart);
+      const eDate = new Date(exportEnd);
+      if (!orgId) return;
+      const { data: exportTxs } = await supabase
+        .from("transactions")
+        .select("id, title, amount, type, date_time, description, deductible")
+        .eq("org_id", orgId)
+        .gte("date_time", sDate.toISOString())
+        .lte("date_time", eDate.toISOString())
+        .order("date_time", { ascending: true });
+      const rows = exportTxs ?? [];
+
+      let csvRows: string[][] = [];
+      const reportName = exportType === "pl" ? "Profit & Loss" : exportType === "bs" ? "Balance Sheet" : "Cash Flow";
+
+      if (exportType === "pl") {
+        csvRows = [
+          ["BookSmart – Profit & Loss Report"],
+          [`Period: ${exportStart} to ${exportEnd}`, `Frequency: ${exportFreq}`],
+          [],
+          ["Date", "Description", "Category", "Revenue", "Expenses"],
+          ...rows.map(t => [
+            new Date(t.date_time).toLocaleDateString("en-US"),
+            t.title,
+            t.type || (t.amount > 0 ? "Income" : "Expense"),
+            t.amount > 0 ? t.amount.toFixed(2) : "",
+            t.amount < 0 ? Math.abs(t.amount).toFixed(2) : "",
+          ]),
+          [],
+          ["", "", "Total Revenue", rows.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0).toFixed(2), ""],
+          ["", "", "Total Expenses", "", rows.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0).toFixed(2)],
+          ["", "", "Net Income", (rows.reduce((s, t) => s + t.amount, 0)).toFixed(2), ""],
+        ];
+      } else if (exportType === "cf") {
+        const moneyIn = rows.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+        const moneyOut = rows.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+        csvRows = [
+          ["BookSmart – Cash Flow Statement"],
+          [`Period: ${exportStart} to ${exportEnd}`, `Frequency: ${exportFreq}`],
+          [],
+          ["Date", "Description", "Type", "Amount"],
+          ...rows.map(t => [
+            new Date(t.date_time).toLocaleDateString("en-US"),
+            t.title,
+            t.amount > 0 ? "Inflow" : "Outflow",
+            t.amount.toFixed(2),
+          ]),
+          [],
+          ["", "Total Money In", "", moneyIn.toFixed(2)],
+          ["", "Total Money Out", "", (-moneyOut).toFixed(2)],
+          ["", "Net Cash Flow", "", (moneyIn - moneyOut).toFixed(2)],
+        ];
+      } else {
+        const totalAssetVal = Math.max(0, rows.reduce((s, t) => s + t.amount, 0));
+        const totalLiabVal = rows.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0) * 0.4;
+        csvRows = [
+          ["BookSmart – Balance Sheet"],
+          [`As of: ${exportEnd}`],
+          [],
+          ["Category", "Amount"],
+          ["Total Assets", totalAssetVal.toFixed(2)],
+          ["Total Liabilities", totalLiabVal.toFixed(2)],
+          ["Owner's Equity", Math.max(0, totalAssetVal - totalLiabVal).toFixed(2)],
+        ];
+      }
+
+      const slug = reportName.toLowerCase().replace(/\s+/g, "_");
+      exportCSV(csvRows, `booksmart_${slug}_${exportStart}_${exportEnd}.csv`);
+      setShowExport(false);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  // ── Document upload handler ─────────────────────────────────────────────────
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingDoc(true);
+    setTimeout(() => {
+      const ext = file.name.split(".").pop()?.toUpperCase() ?? "FILE";
+      const newDoc: DocEntry = {
+        id: Date.now().toString(),
+        title: file.name.replace(/\.[^.]+$/, ""),
+        type: ext,
+        category: "Tax Forms",
+        date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        status: "Uploaded",
+        size: file.size > 1_000_000 ? `${(file.size / 1_000_000).toFixed(1)} MB` : `${Math.round(file.size / 1000)} KB`,
+      };
+      setDocs(prev => [newDoc, ...prev]);
+      setUploadingDoc(false);
+    }, 1200);
+    e.target.value = "";
+  }
+
+  const filteredDocs = docs.filter(d => {
+    const matchSearch = d.title.toLowerCase().includes(docSearch.toLowerCase());
+    const matchCat = docCategory === "All" || d.category === docCategory || d.type === docCategory;
+    return matchSearch && matchCat;
+  });
+
   // Key insights
   const insights: string[] = [];
   if (txs.length > 0) {
@@ -301,21 +473,47 @@ export default function Reports() {
   return (
     <div className="space-y-0 animate-in fade-in slide-in-from-bottom-4 duration-500 -mt-2">
 
-      {/* ── Tabs ── */}
-      <div className="flex items-center gap-0 border-b border-border/50 mb-6">
-        {TAB_LABELS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              tab === key
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
+      {/* ── Tabs + Action buttons ── */}
+      <div className="flex items-center justify-between border-b border-border/50 mb-6">
+        <div className="flex items-center gap-0">
+          {TAB_LABELS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={`px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                tab === key
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 pb-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-primary/40 text-primary hover:bg-primary/10 gap-1.5 text-xs h-8"
+            onClick={() => {
+              if (tab === "pl" || tab === "bs" || tab === "cf") setExportType(tab);
+              else setExportType("pl");
+              setShowExport(true);
+            }}
           >
-            {label}
-          </button>
-        ))}
+            <Download className="h-3.5 w-3.5" />
+            Export
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-border/60 text-muted-foreground hover:bg-secondary/50 gap-1.5 text-xs h-8"
+            onClick={() => setShowDocs(true)}
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Documents
+          </Button>
+        </div>
       </div>
 
       {/* ── Dashboard tab ── */}
@@ -763,6 +961,167 @@ export default function Reports() {
         </div>
       )}
 
+      {/* ── Export Dialog ── */}
+      <Dialog open={showExport} onOpenChange={setShowExport}>
+        <DialogContent className="sm:max-w-md bg-card border-border/60">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5 text-primary" />
+              Export Report
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            {/* Report Type */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Report Type</p>
+              <div className="flex gap-2">
+                {(["pl", "bs", "cf"] as ExportReportType[]).map(rt => (
+                  <button key={rt} onClick={() => setExportType(rt)}
+                    className={`flex-1 py-2 text-xs font-medium rounded-lg border transition-colors ${exportType === rt ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground"}`}>
+                    {rt === "pl" ? "Profit & Loss" : rt === "bs" ? "Balance Sheet" : "Cash Flow"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Date Range */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Start Date</label>
+                <input type="date" value={exportStart} onChange={e => setExportStart(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/60" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  {exportType === "bs" ? "As of Date" : "End Date"}
+                </label>
+                <input type="date" value={exportEnd} onChange={e => setExportEnd(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/60" />
+              </div>
+            </div>
+
+            {/* Frequency */}
+            {exportType !== "bs" && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Frequency</p>
+                <div className="flex gap-2">
+                  {(["monthly", "quarterly", "yearly"] as ExportFreq[]).map(f => (
+                    <button key={f} onClick={() => setExportFreq(f)}
+                      className={`flex-1 py-1.5 text-xs font-medium rounded-lg border capitalize transition-colors ${exportFreq === f ? "bg-primary/20 text-primary border-primary/50" : "border-border/50 text-muted-foreground hover:border-primary/40"}`}>
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground bg-secondary/30 rounded-lg px-3 py-2">
+              Your report will be downloaded as a CSV file, ready to open in Excel or Google Sheets.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowExport(false)} className="border-border/60">
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleExport} disabled={isExporting || !orgId}
+              className="bg-primary text-primary-foreground gap-1.5">
+              {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              {isExporting ? "Preparing…" : "Download CSV"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Document Repository Sheet ── */}
+      <Sheet open={showDocs} onOpenChange={setShowDocs}>
+        <SheetContent side="right" className="w-full sm:max-w-lg bg-card border-border/60 flex flex-col p-0">
+          <SheetHeader className="px-5 pt-5 pb-3 border-b border-border/40">
+            <div className="flex items-center justify-between">
+              <SheetTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Document Repository
+              </SheetTitle>
+              <div>
+                <input ref={fileInputRef} type="file" className="hidden"
+                  accept=".pdf,.csv,.xlsx,.xls,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={handleFileUpload} />
+                <Button size="sm" onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingDoc}
+                  className="bg-primary text-primary-foreground gap-1.5 h-8 text-xs">
+                  {uploadingDoc
+                    ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
+                    : <><Upload className="h-3.5 w-3.5" /> Upload Document</>}
+                </Button>
+              </div>
+            </div>
+            {/* Search */}
+            <div className="relative mt-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input placeholder="Search documents…" value={docSearch} onChange={e => setDocSearch(e.target.value)}
+                className="pl-9 h-8 text-sm bg-background border-border/60" />
+            </div>
+            {/* Category chips */}
+            <div className="flex gap-1.5 flex-wrap mt-2">
+              {DOC_CATEGORIES.map(cat => (
+                <button key={cat} onClick={() => setDocCategory(cat)}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-full border transition-colors ${docCategory === cat ? "bg-primary text-primary-foreground border-primary" : "border-border/60 text-muted-foreground hover:border-primary/50"}`}>
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </SheetHeader>
+
+          {/* Document list */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            {filteredDocs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 gap-3 text-center">
+                <File className="h-10 w-10 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">
+                  {docSearch ? "No documents match your search." : "No documents yet. Upload your first document."}
+                </p>
+                <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()}
+                  className="border-primary/40 text-primary gap-1.5">
+                  <Upload className="h-3.5 w-3.5" /> Upload
+                </Button>
+              </div>
+            ) : filteredDocs.map(doc => {
+              const SIcon = STATUS_ICON[doc.status];
+              return (
+                <div key={doc.id} className="rounded-xl border border-border/40 bg-background/50 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="mt-0.5 h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <FileText className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate">{doc.title}</p>
+                        <p className="text-xs text-muted-foreground">Type: {doc.type}</p>
+                      </div>
+                    </div>
+                    <span className={`flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${STATUS_COLOR[doc.status]}`}>
+                      <SIcon className="h-3 w-3" />
+                      {doc.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{doc.date}</span>
+                    <span>{doc.size}</span>
+                  </div>
+                  <div className="flex gap-2 pt-1 border-t border-border/30">
+                    <button className="flex items-center gap-1 text-xs text-primary hover:underline">
+                      <Search className="h-3 w-3" /> View
+                    </button>
+                    <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline">
+                      <Download className="h-3 w-3" /> Download
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* ── Transactions tab ── */}
       {tab === "transactions" && (
         <div className="space-y-4">
@@ -771,13 +1130,20 @@ export default function Reports() {
               <h1 className="text-2xl font-bold">Transactions</h1>
               <p className="text-sm text-muted-foreground">{periodLabel} · {txs.length} records</p>
             </div>
-            <div className="flex gap-1">
-              {PERIOD_LABELS.map(({ key, label }) => (
-                <button key={key} onClick={() => setPeriod(key)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${period === key ? "bg-primary text-primary-foreground" : "bg-secondary/50 text-muted-foreground hover:bg-secondary"}`}>
-                  {label}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1">
+                {PERIOD_LABELS.map(({ key, label }) => (
+                  <button key={key} onClick={() => setPeriod(key)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${period === key ? "bg-primary text-primary-foreground" : "bg-secondary/50 text-muted-foreground hover:bg-secondary"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <Button size="sm" variant="outline"
+                className="border-primary/40 text-primary hover:bg-primary/10 gap-1.5 text-xs h-7"
+                onClick={() => { setExportType("pl"); setShowExport(true); }}>
+                <Download className="h-3 w-3" /> Export CSV
+              </Button>
             </div>
           </div>
           {isLoading ? <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
