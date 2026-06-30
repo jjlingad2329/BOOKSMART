@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, Loader2, Clock } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Clock, MessageSquare } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDistanceToNow } from "date-fns";
@@ -37,6 +38,7 @@ export default function CpaLeads() {
   const { profile } = useAuth();
   const numericId = profile?.numericId as number | undefined;
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
 
   // ── Pending orders assigned to this CPA ───────────────────────────────────
   const { data: leads = [], isLoading } = useQuery<Order[]>({
@@ -166,11 +168,22 @@ export default function CpaLeads() {
                     </Button>
                     <Button
                       variant="outline"
+                      size="icon"
+                      className="shrink-0 text-muted-foreground hover:text-primary"
+                      title="Chat with client"
+                      onClick={() => navigate("/chat")}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0 text-rose-500 hover:bg-rose-500/10 border-rose-500/30"
+                      title="Decline lead"
                       disabled={isPending}
                       onClick={() => updateStatus.mutate({ id: lead.id, status: "cancelled" })}
                     >
-                      <XCircle className="mr-2 h-4 w-4" />
-                      Decline
+                      <XCircle className="h-4 w-4" />
                     </Button>
                   </div>
                 </CardContent>
