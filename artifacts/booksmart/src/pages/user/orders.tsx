@@ -1,18 +1,175 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Filter, Eye } from "lucide-react";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Search, Filter, Eye, Loader2, ShoppingBag } from "lucide-react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Order = {
+  id: number;
+  user_id: number | null;
+  cpa_id: number | null;
+  cpa_name: string | null;
+  service: string | null;
+  notes: string | null;
+  status: "pending" | "active" | "completed" | "cancelled" | string;
+  created_at: string;
+  amount: number | null;
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function orderId(id: number) {
+  return `ORD-${String(id).padStart(4, "0")}`;
+}
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+  });
+}
+
+function statusColors(status: string) {
+  switch (status) {
+    case "completed": return "text-emerald-500 border-emerald-500/30 bg-emerald-500/5";
+    case "active":    return "text-primary border-primary/30 bg-primary/10";
+    case "cancelled": return "text-rose-500 border-rose-500/30 bg-rose-500/5";
+    default:          return "text-yellow-500 border-yellow-500/30 bg-yellow-500/5"; // pending
+  }
+}
+
+// ─── Detail Dialog ────────────────────────────────────────────────────────────
+
+function OrderDetail({ order, onClose }: { order: Order; onClose: () => void }) {
+  return (
+    <Dialog open onOpenChange={open => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{orderId(order.id)}</DialogTitle>
+          <DialogDescription>Order details and current status</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2 text-sm">
+          <Row label="Status">
+            <Badge variant="outline" className={statusColors(order.status)}>
+              {order.status}
+            </Badge>
+          </Row>
+          <Row label="CPA">{order.cpa_name ?? "—"}</Row>
+          <Row label="Service">{order.service ?? "—"}</Row>
+          <Row label="Date submitted">{fmtDate(order.created_at)}</Row>
+          {order.amount != null && (
+            <Row label="Amount">${order.amount.toFixed(2)}</Row>
+          )}
+          {order.notes && (
+            <div className="pt-2 border-t border-border/30">
+              <p className="text-xs text-muted-foreground mb-1 font-medium uppercase tracking-wide">Notes</p>
+              <p className="text-muted-foreground">{order.notes}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-muted-foreground w-32 flex-shrink-0">{label}</span>
+      <span className="font-medium text-right flex-1">{children}</span>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Orders() {
+  const { profile } = useAuth();
+  const numericId = profile?.numericId ?? null;
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [viewOrder, setViewOrder] = useState<Order | null>(null);
+
+  // ── Fetch real orders for this user ─────────────────────────────────────────
+  const { data: orders = [], isLoading, error } = useQuery<Order[]>({
+    queryKey: ["user_orders", numericId],
+    enabled: numericId !== null,
+    staleTime: 60 * 1000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("orders")
+        .select("id, user_id, cpa_id, cpa_name, service, notes, status, created_at, amount")
+        .eq("user_id", numericId!)
+        .order("created_at", { ascending: false });
+      if (error) {
+        // orders table doesn't exist yet — return empty gracefully
+        if (error.code === "42P01") return [];
+        throw error;
+      }
+      return data ?? [];
+    },
+  });
+
+  // ── Filter ──────────────────────────────────────────────────────────────────
+  const filtered = orders.filter(o => {
+    if (statusFilter !== "all" && o.status !== statusFilter) return false;
+    const q = search.toLowerCase();
+    if (!q) return true;
+    return (
+      orderId(o.id).toLowerCase().includes(q) ||
+      (o.cpa_name ?? "").toLowerCase().includes(q) ||
+      (o.service ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  const STATUS_OPTIONS = ["all", "pending", "active", "completed", "cancelled"];
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
           <p className="text-muted-foreground">Manage your active and past CPA service orders.</p>
         </div>
+        {!isLoading && orders.length > 0 && (
+          <div className="flex gap-2 flex-wrap">
+            {STATUS_OPTIONS.map(s => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors capitalize ${
+                  statusFilter === s
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                }`}
+              >
+                {s === "all" ? "All" : s}
+                {s !== "all" && (
+                  <span className="ml-1 opacity-70">
+                    ({orders.filter(o => o.status === s).length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <Card className="border-border/50">
@@ -21,63 +178,115 @@ export default function Orders() {
           <CardDescription>Track the status of your tax prep and consultation orders.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex justify-between items-center mb-4">
+          {/* Search row */}
+          <div className="flex justify-between items-center mb-4 gap-3">
             <div className="relative w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search orders..." className="pl-9 h-9" />
+              <Input
+                placeholder="Search orders…"
+                className="pl-9 h-9"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
             </div>
-            <Button variant="outline" size="sm" className="h-9 gap-2">
-              <Filter className="h-3 w-3" /> Filter
-            </Button>
+            {search && (
+              <Button variant="ghost" size="sm" onClick={() => setSearch("")}>
+                Clear
+              </Button>
+            )}
           </div>
 
-          <div className="border rounded-md border-border/50">
-            <Table>
-              <TableHeader className="bg-secondary/20">
-                <TableRow>
-                  <TableHead>Order ID</TableHead>
-                  <TableHead>CPA Name</TableHead>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {[
-                  { id: "ORD-8092", cpa: "Sarah Jenkins, CPA", service: "2023 Tax Filing", date: "Oct 12, 2023", amount: "$450.00", status: "completed" },
-                  { id: "ORD-8093", cpa: "Michael Chen", service: "Q3 Consultation", date: "Nov 05, 2023", amount: "$150.00", status: "completed" },
-                  { id: "ORD-8094", cpa: "Elena Rodriguez, CPA", service: "Business Structuring", date: "Dec 10, 2023", amount: "$800.00", status: "active" },
-                  { id: "ORD-8095", cpa: "David Kim, CPA", service: "1099 Review", date: "Jan 15, 2024", amount: "$250.00", status: "pending" },
-                ].map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-medium text-primary">{order.id}</TableCell>
-                    <TableCell>{order.cpa}</TableCell>
-                    <TableCell>{order.service}</TableCell>
-                    <TableCell className="text-muted-foreground">{order.date}</TableCell>
-                    <TableCell>{order.amount}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={
-                        order.status === 'completed' ? "text-emerald-500 border-emerald-500/30" : 
-                        order.status === 'active' ? "text-primary border-primary/30 bg-primary/10" : 
-                        "text-yellow-500 border-yellow-500/30"
-                      }>
-                        {order.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground hover:text-primary hover:bg-primary/10">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
+          {/* Loading */}
+          {isLoading && (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {/* Error */}
+          {!isLoading && error && (
+            <div className="text-center py-10 text-sm text-muted-foreground">
+              Could not load orders. Please try again later.
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!isLoading && !error && orders.length === 0 && (
+            <div className="flex flex-col items-center gap-3 py-14 text-center">
+              <ShoppingBag className="h-10 w-10 text-muted-foreground/40" />
+              <p className="font-medium">No orders yet</p>
+              <p className="text-sm text-muted-foreground max-w-xs">
+                When you hire a CPA from the CPA Network, your orders will appear here.
+              </p>
+              <Button variant="outline" size="sm" asChild>
+                <a href="/user/cpa-network">Browse CPA Network</a>
+              </Button>
+            </div>
+          )}
+
+          {/* No search matches */}
+          {!isLoading && !error && orders.length > 0 && filtered.length === 0 && (
+            <div className="text-center py-10 text-sm text-muted-foreground">
+              No orders match your search.{" "}
+              <button className="underline text-foreground" onClick={() => { setSearch(""); setStatusFilter("all"); }}>
+                Clear filters
+              </button>
+            </div>
+          )}
+
+          {/* Table */}
+          {!isLoading && !error && filtered.length > 0 && (
+            <div className="border rounded-md border-border/50">
+              <Table>
+                <TableHeader className="bg-secondary/20">
+                  <TableRow>
+                    <TableHead>Order ID</TableHead>
+                    <TableHead>CPA Name</TableHead>
+                    <TableHead>Service</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map(order => (
+                    <TableRow key={order.id} className="hover:bg-secondary/10">
+                      <TableCell className="font-medium text-primary">{orderId(order.id)}</TableCell>
+                      <TableCell>{order.cpa_name ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                      <TableCell>{order.service ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                      <TableCell className="text-muted-foreground">{fmtDate(order.created_at)}</TableCell>
+                      <TableCell>
+                        {order.amount != null
+                          ? `$${order.amount.toFixed(2)}`
+                          : <span className="text-muted-foreground text-xs">TBD</span>}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={statusColors(order.status)}>
+                          {order.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          onClick={() => setViewOrder(order)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Detail dialog */}
+      {viewOrder && <OrderDetail order={viewOrder} onClose={() => setViewOrder(null)} />}
     </div>
   );
 }
