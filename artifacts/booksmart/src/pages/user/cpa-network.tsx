@@ -104,17 +104,19 @@ function HireDialog({
         user_id: userNumericId,
         cpa_id: cpa.id,
         title: service,           // order title = service name
-        services: service,        // services column
+        services: [service],      // services is a text[] array column
         description: notes,       // notes go into description
         status: "pending",
         payment_status: "unpaid",
+        amount: 0,                // NOT NULL — CPA will update with actual quote
       };
       const { error } = await supabase.from("orders").insert(payload);
       if (error) {
+        console.error("[hire-cpa] insert error:", error.code, error.message, error.details, error.hint);
         if (error.code === "42P01") {
           throw new Error("Orders are not yet enabled on this account. Please contact support.");
         }
-        throw new Error(error.message);
+        throw new Error(`${error.code}: ${error.message}`);
       }
     },
     onSuccess: () => {
