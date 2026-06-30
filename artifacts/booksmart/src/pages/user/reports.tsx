@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -194,12 +194,6 @@ const STATUS_ICON: Record<DocStatus, typeof CheckCircle2> = {
   Uploaded: CheckCircle2, Verified: CheckCircle2, Processed: Clock,
 };
 
-const SEED_DOCS: DocEntry[] = [
-  { id: "1", title: "W-9 Form - Self", type: "W-9", category: "Tax Forms", date: "Nov 15, 2024", status: "Uploaded", size: "2.4 MB" },
-  { id: "2", title: "1099-INT - Bank Statement", type: "1099", category: "Income", date: "Jan 30, 2024", status: "Verified", size: "1.8 MB" },
-  { id: "3", title: "Business Expense Receipts Q1", type: "Receipts", category: "Expenses", date: "Mar 20, 2024", status: "Uploaded", size: "5.2 MB" },
-  { id: "4", title: "W-2 - Primary Employer", type: "W-2", category: "Employment", date: "Feb 15, 2024", status: "Processed", size: "3.1 MB" },
-];
 
 type ExportFreq = "monthly" | "quarterly" | "yearly";
 type ExportReportType = "pl" | "bs" | "cf";
@@ -216,8 +210,9 @@ function exportCSV(rows: string[][], filename: string) {
 }
 
 export default function Reports() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const numericId = profile?.numericId ?? null;
+  const queryClient = useQueryClient();
   const [period, setPeriod] = useState<Period>("3m");
   const [tab, setTab] = useState<Tab>("dashboard");
 
@@ -235,7 +230,40 @@ export default function Reports() {
   const [showDocs, setShowDocs] = useState(false);
   const [docSearch, setDocSearch] = useState("");
   const [docCategory, setDocCategory] = useState("All");
-  const [docs, setDocs] = useState<DocEntry[]>(SEED_DOCS);
+
+  const { data: docs = [], isLoading: docsLoading } = useQuery<DocEntry[]>({
+    queryKey: ["user_documents", numericId],
+    enabled: numericId !== null,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_documents")
+        .select("id,name,file_url,category,tax_year,file_size,mime_type,created_at")
+        .eq("user_id", numericId!)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map(row => {
+        const ext = (row.name ?? "").split(".").pop()?.toUpperCase() ?? "FILE";
+        const sizeBytes = row.file_size as number | null;
+        return {
+          id: String(row.id),
+          title: (row.name ?? "Untitled").replace(/\.[^.]+$/, ""),
+          type: ext,
+          category: (row.category as string) ?? "Tax Forms",
+          date: new Date(row.created_at as string).toLocaleDateString("en-US", {
+            month: "short", day: "numeric", year: "numeric",
+          }),
+          status: "Uploaded" as DocStatus,
+          size: sizeBytes
+            ? sizeBytes > 1_000_000
+              ? `${(sizeBytes / 1_000_000).toFixed(1)} MB`
+              : `${Math.round(sizeBytes / 1000)} KB`
+            : "–",
+          fileUrl: (row.file_url as string) ?? undefined,
+        };
+      });
+    },
+  });
 
   // Upload dialog state
   const [showUpload, setShowUpload] = useState(false);
@@ -477,7 +505,7 @@ export default function Reports() {
     }
   }
 
-  function handleUploadSave() {
+  async function handleUploadSave() {
     if (!uploadPickedFile) { setUploadError("Please select a file first."); return; }
     if (!uploadName.trim()) { setUploadError("Please enter a document name."); return; }
     if (!uploadCategory) { setUploadError("Please select a document category."); return; }
@@ -487,40 +515,59 @@ export default function Reports() {
       if (!uploadPeriodStart || !uploadPeriodEnd) { setUploadError("Please select period dates."); return; }
       if (uploadPeriodEnd < uploadPeriodStart) { setUploadError("End date must be on or after start date."); return; }
     }
-
-    const CAT_MAP: Record<string, string> = {
-      "Balance Sheet": "Tax Forms",
-      "Profit & Loss": "Income",
-      "Income Statement": "Income",
-      "Cash Flow Statement": "Tax Forms",
-      "Transactions": "Expenses",
-    };
+    if (!numericId || !user?.id) { setUploadError("Not authenticated."); return; }
 
     setUploadSaving(true);
-    setTimeout(() => {
-      const ext = uploadPickedFile.name.split(".").pop()?.toUpperCase() ?? "FILE";
-      const fileUrl = URL.createObjectURL(uploadPickedFile);
-      const newDoc: DocEntry = {
-        id: Date.now().toString(),
-        title: uploadName.trim(),
-        type: ext,
-        category: CAT_MAP[uploadCategory] ?? "Tax Forms",
-        date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-        status: "Uploaded",
-        size: uploadPickedFile.size > 1_000_000
-          ? `${(uploadPickedFile.size / 1_000_000).toFixed(1)} MB`
-          : `${Math.round(uploadPickedFile.size / 1000)} KB`,
-        fileUrl,
-      };
-      setDocs(prev => [newDoc, ...prev]);
-      setUploadSaving(false);
+    setUploadError("");
+    try {
+      // 1. Upload file to Supabase Storage
+      const ext = uploadPickedFile.name.split(".").pop()?.toLowerCase() ?? "";
+      const safeName = `${Date.now()}_${uploadPickedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const storagePath = `${user.id}/${safeName}`;
+      const mimeType = uploadPickedFile.type || "application/octet-stream";
+
+      const { error: storageError } = await supabase.storage
+        .from("documents")
+        .upload(storagePath, uploadPickedFile, { contentType: mimeType });
+      if (storageError) throw new Error(`Storage upload failed: ${storageError.message}`);
+
+      // 2. Get public URL
+      const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(storagePath);
+
+      // 3. Build parsed_data (period metadata)
+      const parsedData = isBalanceSheetUpload
+        ? { as_of: uploadAsOf, document_category: uploadCategory }
+        : { period_start: `${uploadPeriodStart}T00:00:00.000`, period_end: `${uploadPeriodEnd}T00:00:00.000`, document_category: uploadCategory };
+
+      // 4. Insert DB row
+      const docName = ext ? `${uploadName.trim()}.${ext}` : uploadName.trim();
+      const { error: dbError } = await supabase.from("user_documents").insert({
+        user_id: numericId,
+        name: docName,
+        file_url: publicUrl,
+        category: uploadCategory,
+        tax_year: uploadYear,
+        file_size: uploadPickedFile.size,
+        mime_type: mimeType,
+        parsed_data: parsedData,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      if (dbError) throw new Error(`Database insert failed: ${dbError.message}`);
+
+      // 5. Refresh document list
+      queryClient.invalidateQueries({ queryKey: ["user_documents", numericId] });
       setShowUpload(false);
       resetUploadForm();
-    }, 900);
+    } catch (err: unknown) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed. Please try again.");
+    } finally {
+      setUploadSaving(false);
+    }
   }
 
   const filteredDocs = docs.filter(d => {
-    const matchSearch = d.title.toLowerCase().includes(docSearch.toLowerCase());
+    const matchSearch = (d.title ?? "").toLowerCase().includes(docSearch.toLowerCase());
     const matchCat = docCategory === "All" || d.category === docCategory || d.type === docCategory;
     return matchSearch && matchCat;
   });
@@ -1311,7 +1358,12 @@ export default function Reports() {
 
           {/* Document list */}
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-            {filteredDocs.length === 0 ? (
+            {docsLoading ? (
+              <div className="flex flex-col items-center justify-center h-40 gap-3">
+                <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                <p className="text-sm text-muted-foreground">Loading documents…</p>
+              </div>
+            ) : filteredDocs.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-40 gap-3 text-center">
                 <File className="h-10 w-10 text-muted-foreground/30" />
                 <p className="text-sm text-muted-foreground">
