@@ -36,17 +36,17 @@ function RootLayoutNav() {
 
   if (session && inAuth) {
     const role = profile?.role ?? "user";
-    if (role === "cpa") return <Redirect href="/(cpa-tabs)/" />;
-    return <Redirect href="/(tabs)/" />;
+    if (role === "cpa") return <Redirect href="/(cpa-tabs)" />;
+    return <Redirect href="/(tabs)" />;
   }
 
   if (session && profile && !inAuth) {
     const role = profile.role;
     if (role === "cpa" && !inCpaTabs && !inTabs) {
-      return <Redirect href="/(cpa-tabs)/" />;
+      return <Redirect href="/(cpa-tabs)" />;
     }
     if ((role === "user" || role === "admin") && !inTabs && !inCpaTabs) {
-      return <Redirect href="/(tabs)/" />;
+      return <Redirect href="/(tabs)" />;
     }
   }
 

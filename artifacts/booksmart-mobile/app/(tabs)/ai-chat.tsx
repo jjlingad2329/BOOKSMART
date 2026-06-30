@@ -54,13 +54,13 @@ export default function AiChatScreen() {
     setInput("");
     setLoading(true);
 
-    const apiMessages = currentMessages
+    const apiMessages: Array<{ role: "user" | "assistant" | "system"; content: string }> = currentMessages
       .filter((m) => m.id !== "0")
       .map((m) => ({ role: m.role, content: m.content }));
 
     if (apiMessages[0]?.role !== "system") {
       apiMessages.unshift({
-        role: "system" as any,
+        role: "system",
         content: `You are a helpful AI financial advisor for US freelancers and small businesses. The user's name is ${profile?.first_name || "there"}. Provide concise, actionable financial and tax advice.`,
       });
     }

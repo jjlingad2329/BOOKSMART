@@ -70,7 +70,7 @@ export default function OrdersScreen() {
         .select("id, title, status, payment_status, amount, services, cpa:users!orders_cpa_id_fkey(first_name, last_name)")
         .eq("user_id", profile.numericId)
         .order("id", { ascending: false });
-      return (data ?? []) as Order[];
+      return (data ?? []) as unknown as Order[];
     },
     enabled: !!profile?.numericId,
   });
