@@ -24,3 +24,9 @@ id = "pkYEoN5lZXS2LXyI6udBp"
 uri = "file://eod-report-2026-06-30.md"
 type = "text"
 title = "EOD Report — June 30, 2026"
+
+[[outputs]]
+id = "MiKYDP-7A0dWvX8Du8MPA"
+uri = "file://system-report-2026-06-30.md"
+type = "text"
+title = "System Update Report — June 30, 2026"
