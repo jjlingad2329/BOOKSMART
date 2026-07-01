@@ -1073,6 +1073,15 @@ export default function Tax() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user_documents", numericId] });
+      qc.invalidateQueries({ queryKey: ["doc_count", numericId] });
+      qc.invalidateQueries({ queryKey: ["pending_count", numericId] });
+      qc.invalidateQueries({ queryKey: ["tx_month"] });
+      qc.invalidateQueries({ queryKey: ["tx_recent"] });
+      qc.invalidateQueries({ queryKey: ["tx_count"] });
+      qc.invalidateQueries({ queryKey: ["tx_last_month"] });
+      qc.invalidateQueries({ queryKey: ["tx_period"] });
+      qc.invalidateQueries({ queryKey: ["tx_prev_period"] });
+      qc.invalidateQueries({ queryKey: ["tx_all_balance"] });
       toast({ title: "Document deleted" });
     },
     onError: (e: Error) => {
