@@ -130,7 +130,7 @@ export default function Orders() {
         if (error.code === "42P01") return [];
         throw error;
       }
-      return data ?? [];
+      return (data ?? []) as unknown as Order[];
     },
   });
 
